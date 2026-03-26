@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 
+import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 
@@ -10,6 +11,7 @@ import CreateExam from './pages/CreateExam';
 
 import StudentDashboard from './pages/StudentDashboard';
 import TakeExam from './pages/TakeExam';
+import ReviewExam from './pages/ReviewExam';
 
 const ProtectedRoute = ({ children, roleRequired }) => {
   const { user, loading } = useAuth();
@@ -25,6 +27,7 @@ function App() {
   return (
     <Router>
       <Routes>
+        <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         
@@ -41,8 +44,9 @@ function App() {
         <Route path="/student/exam/:id" element={
           <ProtectedRoute roleRequired="student"><TakeExam /></ProtectedRoute>
         } />
-        
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/student/review/:id" element={
+          <ProtectedRoute roleRequired="student"><ReviewExam /></ProtectedRoute>
+        } />
       </Routes>
     </Router>
   );

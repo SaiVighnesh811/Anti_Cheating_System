@@ -14,6 +14,7 @@ const TakeExam = () => {
   const [answers, setAnswers] = useState([]);
   const [timeLeft, setTimeLeft] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [activeWarningType, setActiveWarningType] = useState(null);
   
   const { warnings, isWarningVisible, dismissWarning } = useAntiCheat(attemptId, !submitting);
 
@@ -62,6 +63,53 @@ const TakeExam = () => {
     fetchExamDetails();
   }, [attemptId, navigate]);
 
+  // Handle Specific Local UI Warnings (Backend logic relies on useAntiCheat)
+  useEffect(() => {
+    if (loading || !exam) return;
+
+    // Fullscreen Enter on load
+    const enterFullscreen = () => {
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen().catch(err => console.log("Fullscreen request failed", err));
+      }
+    };
+    enterFullscreen();
+
+    const handleFullscreenChange = async () => {
+      if (!document.fullscreenElement) {
+        setActiveWarningType('fullscreen-exit');
+        try {
+          await api.post(`/attempts/${attemptId}/violation`, { type: 'fullscreen-exit' });
+        } catch (err) { }
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) setActiveWarningType('tab-switch');
+    };
+
+    const handleBlur = () => {
+      // Don't trigger blur if we're just exiting fullscreen (which might cause a blur)
+      if (document.fullscreenElement) {
+         setActiveWarningType('blur');
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('blur', handleBlur);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('blur', handleBlur);
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(err => console.log(err));
+      }
+    };
+  }, [loading, exam, attemptId]);
+
   useEffect(() => {
     if (timeLeft === null) return;
     
@@ -90,7 +138,7 @@ const TakeExam = () => {
     try {
       await api.post(`/attempts/${attemptId}/submit`, { answers });
       alert('Exam submitted successfully!');
-      navigate('/student');
+      navigate(`/student/review/${attemptId}`);
     } catch (err) {
       alert('Error submitting exam: ' + (err.response?.data?.message || err.message));
       setSubmitting(false);
@@ -115,6 +163,11 @@ const TakeExam = () => {
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+          {warnings > 0 && (
+            <div className={`violation-counter ${activeWarningType ? 'active-pulse' : ''}`}>
+              Violations: {warnings} 🚨
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: timeLeft < 300 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.05)', padding: '0.5rem 1rem', borderRadius: '8px', color: timeLeft < 300 ? 'var(--danger)' : 'var(--text-primary)', transition: 'all 0.3s' }}>
             <Clock size={20} />
             <span style={{ fontSize: '1.2rem', fontWeight: '700', fontVariantNumeric: 'tabular-nums' }}>{formatTime(timeLeft)}</span>
@@ -131,22 +184,57 @@ const TakeExam = () => {
         </div>
       </div>
 
-      {/* Warning Full Screen Overlay */}
-      {isWarningVisible && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(8px)' }}>
-          <div className="glass-panel" style={{ padding: '3rem', maxWidth: '500px', textAlign: 'center', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-            <AlertTriangle size={64} color="var(--danger)" style={{ margin: '0 auto 1.5rem auto' }} />
-            <h2 style={{ fontSize: '2rem', color: 'var(--danger)', marginBottom: '1rem' }}>Warning!</h2>
-            <p style={{ fontSize: '1.1rem', marginBottom: '2rem', color: 'var(--text-primary)' }}>
-              We detected suspicious activity (such as switching tabs or minimizing the window). This violation has been logged to the server.
-            </p>
-            <p style={{ fontSize: '1rem', color: 'var(--warning)', fontWeight: '600', marginBottom: '2.5rem' }}>
-              Total Warnings: {warnings}
-            </p>
-            <button onClick={dismissWarning} className="btn-primary" style={{ width: '100%' }}>
-              I Understand, Return to Exam
-            </button>
-          </div>
+      {/* Custom Smart Warning Overlays */}
+      {activeWarningType && (
+        <div className="warning-overlay">
+          {activeWarningType === 'tab-switch' && (
+            <div className="glass-panel warning-modal warning-shake">
+              <AlertTriangle size={64} color="var(--danger)" style={{ margin: '0 auto 1.5rem auto' }} />
+              <h2 style={{ fontSize: '2rem', color: 'var(--danger)', marginBottom: '1rem' }}>Suspicious Activity</h2>
+              <p style={{ fontSize: '1.2rem', marginBottom: '2rem', color: 'var(--text-primary)' }}>
+                🚫 Tab switching is violated.
+              </p>
+              <button onClick={() => { setActiveWarningType(null); dismissWarning(); }} className="btn-primary" style={{ width: '100%', background: 'var(--danger)' }}>
+                I Understand
+              </button>
+            </div>
+          )}
+          
+          {activeWarningType === 'blur' && (
+            <div className="glass-panel warning-modal warning-popup">
+              <AlertTriangle size={64} color="var(--warning)" style={{ margin: '0 auto 1.5rem auto' }} />
+              <h2 style={{ fontSize: '2rem', color: 'var(--warning)', marginBottom: '1rem' }}>Attention!</h2>
+              <p style={{ fontSize: '1.2rem', marginBottom: '2rem', color: 'var(--text-primary)' }}>
+                ⚠️ Do not minimize the exam screen.
+              </p>
+              <button onClick={() => { setActiveWarningType(null); dismissWarning(); }} className="btn-primary" style={{ width: '100%', background: 'var(--warning)', color: '#000' }}>
+                Return to Exam
+              </button>
+            </div>
+          )}
+
+          {activeWarningType === 'fullscreen-exit' && (
+            <div className="glass-panel warning-modal warning-popup" style={{ border: '1px solid rgba(245, 158, 11, 0.5)', animation: 'pulseGlow 2s infinite' }}>
+              <AlertTriangle size={64} color="var(--warning)" style={{ margin: '0 auto 1.5rem auto' }} />
+              <h2 style={{ fontSize: '2rem', color: 'var(--warning)', marginBottom: '1rem' }}>Fullscreen Required</h2>
+              <p style={{ fontSize: '1.2rem', marginBottom: '2rem', color: 'var(--text-primary)' }}>
+                ⚠️ Fullscreen mode is required. Exiting fullscreen is a violation.
+              </p>
+              <button 
+                onClick={() => {
+                  setActiveWarningType(null);
+                  const elem = document.documentElement;
+                  if (elem.requestFullscreen) {
+                    elem.requestFullscreen().catch(err => console.log(err));
+                  }
+                }} 
+                className="btn-primary" 
+                style={{ width: '100%', background: 'var(--warning)', color: '#000' }}
+              >
+                Return to Fullscreen
+              </button>
+            </div>
+          )}
         </div>
       )}
 

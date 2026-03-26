@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { User as UserIcon, KeyRound, Mail, AlertCircle, Shield } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 const Register = () => {
   const [name, setName] = useState('');
@@ -33,8 +33,8 @@ const Register = () => {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '1rem' }}>
-      <div className="glass-panel" style={{ width: '100%', maxWidth: '420px', padding: '2.5rem' }}>
+    <div className="login-background">
+      <div className="glass-panel auth-panel">
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <h1 className="page-title" style={{ margin: '0 0 0.5rem 0', fontSize: '2.5rem' }}>Create Account</h1>
           <p style={{ color: 'var(--text-secondary)' }}>Get started with the Exam Portal</p>
@@ -51,13 +51,10 @@ const Register = () => {
           <div className="input-group">
             <label>Full Name</label>
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '12px', color: 'var(--text-secondary)' }}>
-                <UserIcon size={18} />
-              </div>
+              <div className="input-emoji">👤</div>
               <input 
                 type="text" 
-                className="input-field" 
-                style={{ paddingLeft: '2.5rem' }}
+                className="input-field-enhanced"
                 placeholder="John Doe" 
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -69,13 +66,10 @@ const Register = () => {
           <div className="input-group">
             <label>Email Address</label>
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '12px', color: 'var(--text-secondary)' }}>
-                <Mail size={18} />
-              </div>
+              <div className="input-emoji">📧</div>
               <input 
                 type="email" 
-                className="input-field" 
-                style={{ paddingLeft: '2.5rem' }}
+                className="input-field-enhanced"
                 placeholder="you@example.com" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -87,13 +81,10 @@ const Register = () => {
           <div className="input-group">
             <label>Password</label>
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '12px', color: 'var(--text-secondary)' }}>
-                <KeyRound size={18} />
-              </div>
+              <div className="input-emoji">🔒</div>
               <input 
                 type="password" 
-                className="input-field" 
-                style={{ paddingLeft: '2.5rem' }}
+                className="input-field-enhanced"
                 placeholder="••••••••" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -105,12 +96,10 @@ const Register = () => {
           <div className="input-group">
             <label>Account Role</label>
             <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '12px', color: 'var(--text-secondary)' }}>
-                <Shield size={18} />
-              </div>
+              <div className="input-emoji">🛡️</div>
               <select 
-                className="input-field"
-                style={{ paddingLeft: '2.5rem', appearance: 'none' }}
+                className="input-field-enhanced"
+                style={{ appearance: 'none' }}
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
               >

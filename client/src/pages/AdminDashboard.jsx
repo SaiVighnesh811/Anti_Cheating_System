@@ -20,7 +20,23 @@ const AdminDashboard = () => {
           api.get('/attempts/all')
         ]);
         setExams(examsRes.data);
-        setViolations(violationsRes.data);
+        
+        // Group violations by student
+        const rawViolations = violationsRes.data;
+        const studentViolations = rawViolations.reduce((acc, v) => {
+          const sId = v.student?._id;
+          if (!sId) return acc;
+          if (!acc[sId]) {
+            acc[sId] = { student: v.student, total: 0, tab: 0, fullscreen: 0, minimize: 0 };
+          }
+          acc[sId].total += 1;
+          if (v.type === 'TAB_SWITCH' || v.type === 'tab-switch') acc[sId].tab += 1;
+          if (v.type === 'FULLSCREEN_EXIT' || v.type === 'fullscreen-exit') acc[sId].fullscreen += 1;
+          if (v.type === 'MINIMIZE' || v.type === 'window-blur') acc[sId].minimize += 1;
+          return acc;
+        }, {});
+        
+        setViolations(Object.values(studentViolations).sort((a,b) => b.total - a.total));
         setAttempts(attemptsRes.data);
       } catch (err) {
         console.error('Error fetching dashboard data', err);
@@ -86,18 +102,35 @@ const AdminDashboard = () => {
               No cheating violations recorded yet. All clear!
             </p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
-              {violations.map(violation => (
-                <div key={violation._id} style={{ background: 'rgba(245, 158, 11, 0.05)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                    <span style={{ fontWeight: '600', color: 'var(--warning)', fontSize: '0.9rem' }}>{violation.type.replace('-', ' ').toUpperCase()}</span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{new Date(violation.timestamp).toLocaleString()}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '500px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+              {violations.map(group => (
+                <div key={group.student._id} className="glass-panel" style={{ padding: '1.25rem', border: '1px solid rgba(245, 158, 11, 0.3)', transition: 'transform 0.2s', cursor: 'default' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{group.student.name}</h3>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{group.student.email}</span>
+                    </div>
+                    <div style={{ background: 'rgba(239, 68, 68, 0.2)', color: 'var(--danger)', padding: '0.25rem 0.75rem', borderRadius: '1rem', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                      {group.total} Total
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.9rem' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Student: </span> {violation.student?.name}
-                  </div>
-                  <div style={{ fontSize: '0.9rem' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Exam: </span> {violation.exam?.title}
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.2rem', marginBottom: '0.25rem' }}>🚫</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Tab Switch</div>
+                      <div style={{ fontWeight: '700', color: group.tab > 0 ? 'var(--warning)' : 'var(--text-primary)' }}>{group.tab}</div>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.2rem', marginBottom: '0.25rem' }}>⚠️</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Fullscreen</div>
+                      <div style={{ fontWeight: '700', color: group.fullscreen > 0 ? 'var(--warning)' : 'var(--text-primary)' }}>{group.fullscreen}</div>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.2rem', marginBottom: '0.25rem' }}>📉</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Minimize</div>
+                      <div style={{ fontWeight: '700', color: group.minimize > 0 ? 'var(--warning)' : 'var(--text-primary)' }}>{group.minimize}</div>
+                    </div>
                   </div>
                 </div>
               ))}
