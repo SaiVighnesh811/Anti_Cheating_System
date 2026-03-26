@@ -83,7 +83,7 @@ router.post('/:id/violation', protect, async (req, res) => {
     
     // Map legacy frontend types to new explicit backend types
     if (type === 'tab-switch') type = 'TAB_SWITCH';
-    if (type === 'window-blur') type = 'MINIMIZE';
+    if (type === 'window-blur') type = 'TAB_SWITCH';
     if (type === 'fullscreen-exit') type = 'FULLSCREEN_EXIT';
 
     const attempt = await Attempt.findById(req.params.id);

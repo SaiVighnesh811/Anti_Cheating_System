@@ -10,6 +10,7 @@ const AdminDashboard = () => {
   const [violations, setViolations] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedStudentGroup, setSelectedStudentGroup] = useState(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -27,9 +28,10 @@ const AdminDashboard = () => {
           const sId = v.student?._id;
           if (!sId) return acc;
           if (!acc[sId]) {
-            acc[sId] = { student: v.student, total: 0, tab: 0, fullscreen: 0, minimize: 0 };
+            acc[sId] = { student: v.student, total: 0, tab: 0, fullscreen: 0, minimize: 0, history: [] };
           }
           acc[sId].total += 1;
+          acc[sId].history.push(v);
           if (v.type === 'TAB_SWITCH' || v.type === 'tab-switch') acc[sId].tab += 1;
           if (v.type === 'FULLSCREEN_EXIT' || v.type === 'fullscreen-exit') acc[sId].fullscreen += 1;
           if (v.type === 'MINIMIZE' || v.type === 'window-blur') acc[sId].minimize += 1;
@@ -104,32 +106,37 @@ const AdminDashboard = () => {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '500px', overflowY: 'auto', paddingRight: '0.5rem' }}>
               {violations.map(group => (
-                <div key={group.student._id} className="glass-panel" style={{ padding: '1.25rem', border: '1px solid rgba(245, 158, 11, 0.3)', transition: 'transform 0.2s', cursor: 'default' }}>
+                <div 
+                  key={group.student._id} 
+                  className="glass-panel" 
+                  onClick={() => setSelectedStudentGroup(group)}
+                  style={{ 
+                    padding: '1.25rem', 
+                    border: '1px solid rgba(245, 158, 11, 0.3)', 
+                    transition: 'transform 0.2s', 
+                    cursor: 'pointer' 
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                  onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                     <div>
                       <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>{group.student.name}</h3>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{group.student.email}</span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Click for details</span>
                     </div>
                     <div style={{ background: 'rgba(239, 68, 68, 0.2)', color: 'var(--danger)', padding: '0.25rem 0.75rem', borderRadius: '1rem', fontWeight: 'bold', fontSize: '0.9rem' }}>
                       {group.total} Total
                     </div>
                   </div>
                   
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                     <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '1.2rem', marginBottom: '0.25rem' }}>🚫</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Tab Switch</div>
                       <div style={{ fontWeight: '700', color: group.tab > 0 ? 'var(--warning)' : 'var(--text-primary)' }}>{group.tab}</div>
                     </div>
                     <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: '8px', textAlign: 'center' }}>
                       <div style={{ fontSize: '1.2rem', marginBottom: '0.25rem' }}>⚠️</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Fullscreen</div>
                       <div style={{ fontWeight: '700', color: group.fullscreen > 0 ? 'var(--warning)' : 'var(--text-primary)' }}>{group.fullscreen}</div>
-                    </div>
-                    <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: '8px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.2rem', marginBottom: '0.25rem' }}>📉</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Minimize</div>
-                      <div style={{ fontWeight: '700', color: group.minimize > 0 ? 'var(--warning)' : 'var(--text-primary)' }}>{group.minimize}</div>
                     </div>
                   </div>
                 </div>
@@ -192,6 +199,82 @@ const AdminDashboard = () => {
           </div>
         )}
       </div>
+
+      {/* Detailed Student Violation Modal */}
+      {selectedStudentGroup && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(5px)',
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          zIndex: 1000, padding: '1rem',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%', maxWidth: '700px', maxHeight: '90vh',
+            display: 'flex', flexDirection: 'column',
+            animation: 'popupScale 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+          }}>
+            <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h2 style={{ fontSize: '1.8rem', margin: '0 0 0.25rem 0', color: 'var(--text-primary)' }}>{selectedStudentGroup.student.name}</h2>
+                <div style={{ color: 'var(--text-secondary)' }}>ID: {selectedStudentGroup.student._id} | {selectedStudentGroup.student.email}</div>
+              </div>
+              <button 
+                onClick={() => setSelectedStudentGroup(null)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '2rem', cursor: 'pointer', padding: '0 0.5rem' }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div style={{ padding: '2rem', overflowY: 'auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
+                <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--danger)' }}>{selectedStudentGroup.total}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>Total 🚨</div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--warning)' }}>{selectedStudentGroup.tab}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Tab Switches 🚫</div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--warning)' }}>{selectedStudentGroup.fullscreen}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Fullscreen ⚠️</div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--warning)' }}>{selectedStudentGroup.minimize}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Minimize 📉</div>
+                </div>
+              </div>
+
+              <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <AlertTriangle size={20} color="var(--warning)" /> Violation History
+              </h3>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {selectedStudentGroup.history.length === 0 ? (
+                  <p style={{ color: 'var(--text-secondary)' }}>No history details available.</p>
+                ) : (
+                  selectedStudentGroup.history.map((log, idx) => {
+                    let descriptor = '';
+                    if (log.type === 'TAB_SWITCH' || log.type === 'tab-switch') descriptor = 'Tab switched';
+                    else if (log.type === 'FULLSCREEN_EXIT' || log.type === 'fullscreen-exit') descriptor = 'Fullscreen exited';
+                    else if (log.type === 'MINIMIZE' || log.type === 'window-blur') descriptor = 'Screen minimized';
+                    else descriptor = `Triggered ${log.type}`;
+
+                    return (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', background: 'rgba(255,255,255,0.02)', borderLeft: '3px solid var(--warning)', borderRadius: '4px' }}>
+                        <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{descriptor}</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{new Date(log.timestamp).toLocaleString()}</div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

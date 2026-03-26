@@ -92,7 +92,7 @@ const TakeExam = () => {
     const handleBlur = () => {
       // Don't trigger blur if we're just exiting fullscreen (which might cause a blur)
       if (document.fullscreenElement) {
-         setActiveWarningType('blur');
+         setActiveWarningType('tab-switch');
       }
     };
 
@@ -188,7 +188,7 @@ const TakeExam = () => {
       {activeWarningType && (
         <div className="warning-overlay">
           {activeWarningType === 'tab-switch' && (
-            <div className="glass-panel warning-modal warning-shake">
+            <div className="glass-panel warning-modal warning-popup">
               <AlertTriangle size={64} color="var(--danger)" style={{ margin: '0 auto 1.5rem auto' }} />
               <h2 style={{ fontSize: '2rem', color: 'var(--danger)', marginBottom: '1rem' }}>Suspicious Activity</h2>
               <p style={{ fontSize: '1.2rem', marginBottom: '2rem', color: 'var(--text-primary)' }}>
@@ -196,19 +196,6 @@ const TakeExam = () => {
               </p>
               <button onClick={() => { setActiveWarningType(null); dismissWarning(); }} className="btn-primary" style={{ width: '100%', background: 'var(--danger)' }}>
                 I Understand
-              </button>
-            </div>
-          )}
-          
-          {activeWarningType === 'blur' && (
-            <div className="glass-panel warning-modal warning-popup">
-              <AlertTriangle size={64} color="var(--warning)" style={{ margin: '0 auto 1.5rem auto' }} />
-              <h2 style={{ fontSize: '2rem', color: 'var(--warning)', marginBottom: '1rem' }}>Attention!</h2>
-              <p style={{ fontSize: '1.2rem', marginBottom: '2rem', color: 'var(--text-primary)' }}>
-                ⚠️ Do not minimize the exam screen.
-              </p>
-              <button onClick={() => { setActiveWarningType(null); dismissWarning(); }} className="btn-primary" style={{ width: '100%', background: 'var(--warning)', color: '#000' }}>
-                Return to Exam
               </button>
             </div>
           )}
