@@ -46,5 +46,5 @@ export const useAntiCheat = (attemptId, isExamActive = true) => {
 
   const dismissWarning = () => setIsWarningVisible(false);
 
-  return { warnings, isWarningVisible, dismissWarning };
+  return { warnings, isWarningVisible, dismissWarning, logViolation };
 };

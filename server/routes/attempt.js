@@ -168,4 +168,21 @@ router.get('/:id/review', protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/attempts/violations/by-exam/:examId
+// @desc    Get violations for a specific exam (Admin only)
+// @access  Private/Admin
+router.get('/violations/by-exam/:examId', protect, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
+    
+    const logs = await ViolationLog.find({ exam: req.params.examId })
+      .populate('student', 'name email')
+      .populate('exam', 'title')
+      .sort('-timestamp');
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 export default router;

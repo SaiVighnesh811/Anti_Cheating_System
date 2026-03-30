@@ -1,16 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { PlusCircle, FileText, AlertTriangle, LogOut } from 'lucide-react';
+import { PlusCircle, FileText, AlertTriangle, LogOut, Filter } from 'lucide-react';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Bar, Pie } from 'react-chartjs-2';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const [exams, setExams] = useState([]);
-  const [violations, setViolations] = useState([]);
+  const [rawViolations, setRawViolations] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudentGroup, setSelectedStudentGroup] = useState(null);
+  const [selectedExamId, setSelectedExamId] = useState('all');
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -21,24 +26,7 @@ const AdminDashboard = () => {
           api.get('/attempts/all')
         ]);
         setExams(examsRes.data);
-        
-        // Group violations by student
-        const rawViolations = violationsRes.data;
-        const studentViolations = rawViolations.reduce((acc, v) => {
-          const sId = v.student?._id;
-          if (!sId) return acc;
-          if (!acc[sId]) {
-            acc[sId] = { student: v.student, total: 0, tab: 0, fullscreen: 0, minimize: 0, history: [] };
-          }
-          acc[sId].total += 1;
-          acc[sId].history.push(v);
-          if (v.type === 'TAB_SWITCH' || v.type === 'tab-switch') acc[sId].tab += 1;
-          if (v.type === 'FULLSCREEN_EXIT' || v.type === 'fullscreen-exit') acc[sId].fullscreen += 1;
-          if (v.type === 'MINIMIZE' || v.type === 'window-blur') acc[sId].minimize += 1;
-          return acc;
-        }, {});
-        
-        setViolations(Object.values(studentViolations).sort((a,b) => b.total - a.total));
+        setRawViolations(violationsRes.data);
         setAttempts(attemptsRes.data);
       } catch (err) {
         console.error('Error fetching dashboard data', err);
@@ -48,6 +36,83 @@ const AdminDashboard = () => {
     };
     fetchDashboardData();
   }, []);
+
+  // Filter violations by selected exam
+  const filteredViolations = useMemo(() => {
+    if (selectedExamId === 'all') return rawViolations;
+    return rawViolations.filter(v => v.exam?._id === selectedExamId || v.exam === selectedExamId);
+  }, [rawViolations, selectedExamId]);
+
+  // Group filtered violations by student
+  const violations = useMemo(() => {
+    const grouped = filteredViolations.reduce((acc, v) => {
+      const sId = v.student?._id;
+      if (!sId) return acc;
+      if (!acc[sId]) {
+        acc[sId] = { student: v.student, total: 0, tab: 0, fullscreen: 0, minimize: 0, history: [] };
+      }
+      acc[sId].total += 1;
+      acc[sId].history.push(v);
+      if (v.type === 'TAB_SWITCH' || v.type === 'tab-switch') acc[sId].tab += 1;
+      if (v.type === 'FULLSCREEN_EXIT' || v.type === 'fullscreen-exit') acc[sId].fullscreen += 1;
+      if (v.type === 'MINIMIZE' || v.type === 'window-blur') acc[sId].minimize += 1;
+      return acc;
+    }, {});
+    return Object.values(grouped).sort((a, b) => b.total - a.total);
+  }, [filteredViolations]);
+
+  // Chart data
+  const barChartData = useMemo(() => {
+    const top10 = violations.slice(0, 10);
+    return {
+      labels: top10.map(g => g.student.name),
+      datasets: [{
+        label: 'Violations',
+        data: top10.map(g => g.total),
+        backgroundColor: 'rgba(99, 102, 241, 0.7)',
+        borderColor: 'rgba(99, 102, 241, 1)',
+        borderWidth: 1,
+        borderRadius: 6
+      }]
+    };
+  }, [violations]);
+
+  const pieChartData = useMemo(() => {
+    let tabCount = 0, fsCount = 0;
+    filteredViolations.forEach(v => {
+      if (v.type === 'TAB_SWITCH' || v.type === 'tab-switch') tabCount++;
+      else if (v.type === 'FULLSCREEN_EXIT' || v.type === 'fullscreen-exit') fsCount++;
+    });
+    return {
+      labels: ['Tab Switch', 'Fullscreen Exit'],
+      datasets: [{
+        data: [tabCount, fsCount],
+        backgroundColor: ['rgba(239, 68, 68, 0.7)', 'rgba(245, 158, 11, 0.7)'],
+        borderColor: ['rgba(239, 68, 68, 1)', 'rgba(245, 158, 11, 1)'],
+        borderWidth: 1
+      }]
+    };
+  }, [filteredViolations]);
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: 'rgba(255,255,255,0.7)', font: { size: 12 } } }
+    },
+    scales: {
+      x: { ticks: { color: 'rgba(255,255,255,0.6)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+      y: { beginAtZero: true, ticks: { color: 'rgba(255,255,255,0.6)', stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.05)' } }
+    }
+  };
+
+  const pieOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { color: 'rgba(255,255,255,0.7)', font: { size: 13 }, padding: 20 } }
+    }
+  };
 
   if (loading) return <div className="page-container" style={{ textAlign: 'center', marginTop: '4rem' }}>Loading Dashboard...</div>;
 
@@ -62,6 +127,55 @@ const AdminDashboard = () => {
           <LogOut size={18} /> Logout
         </button>
       </div>
+
+      {/* Analytics Charts Section */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem', marginBottom: '3rem' }}>
+        <div className="glass-panel" style={{ padding: '2rem' }}>
+          <h2 style={{ fontSize: '1.3rem', fontWeight: '600', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            📊 Violations Per Student
+          </h2>
+          <div style={{ height: '280px' }}>
+            {violations.length > 0 ? (
+              <Bar data={barChartData} options={chartOptions} />
+            ) : (
+              <p style={{ color: 'var(--text-secondary)', textAlign: 'center', paddingTop: '4rem' }}>No violation data to display.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="glass-panel" style={{ padding: '2rem' }}>
+          <h2 style={{ fontSize: '1.3rem', fontWeight: '600', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            🧩 Violation Type Distribution
+          </h2>
+          <div style={{ height: '280px', display: 'flex', justifyContent: 'center' }}>
+            {filteredViolations.length > 0 ? (
+              <Pie data={pieChartData} options={pieOptions} />
+            ) : (
+              <p style={{ color: 'var(--text-secondary)', textAlign: 'center', paddingTop: '4rem' }}>No violation data to display.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Top Suspicious Students Leaderboard */}
+      {violations.length > 0 && (
+        <div className="glass-panel" style={{ padding: '2rem', marginBottom: '3rem', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+          <h2 style={{ fontSize: '1.3rem', fontWeight: '600', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            🚨 Top Suspicious Students
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {violations.slice(0, 5).map((group, idx) => (
+              <div key={group.student._id} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', borderLeft: `3px solid ${idx === 0 ? 'var(--danger)' : 'var(--warning)'}` }}>
+                <span style={{ fontWeight: '700', fontSize: '1.2rem', color: idx === 0 ? 'var(--danger)' : 'var(--warning)', width: '2rem', textAlign: 'center' }}>#{idx + 1}</span>
+                <span style={{ flex: 1, fontWeight: '500' }}>{group.student.name}</span>
+                <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)', padding: '0.25rem 0.75rem', borderRadius: '1rem', fontWeight: '600', fontSize: '0.85rem' }}>
+                  {group.total} violations
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', marginBottom: '3rem' }}>
         <div className="glass-panel" style={{ padding: '2rem' }}>
@@ -93,15 +207,40 @@ const AdminDashboard = () => {
         </div>
 
         <div className="glass-panel" style={{ padding: '2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-            <AlertTriangle size={24} color="var(--warning)" />
-            <h2 style={{ fontSize: '1.5rem', fontWeight: '600' }}>Recent Violations</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <AlertTriangle size={24} color="var(--warning)" />
+              <h2 style={{ fontSize: '1.5rem', fontWeight: '600' }}>Violations</h2>
+            </div>
+            {/* Exam Filter Dropdown */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Filter size={16} color="var(--text-secondary)" />
+              <select
+                value={selectedExamId}
+                onChange={(e) => setSelectedExamId(e.target.value)}
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--surface-border)',
+                  borderRadius: '8px',
+                  padding: '0.4rem 0.75rem',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+              >
+                <option value="all" style={{ background: '#1a1a2e' }}>All Exams</option>
+                {exams.map(e => (
+                  <option key={e._id} value={e._id} style={{ background: '#1a1a2e' }}>{e.title}</option>
+                ))}
+              </select>
+            </div>
           </div>
           
           {violations.length === 0 ? (
             <p style={{ color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)' }}></div>
-              No cheating violations recorded yet. All clear!
+              No cheating violations recorded{selectedExamId !== 'all' ? ' for this exam' : ''}. All clear!
             </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '500px', overflowY: 'auto', paddingRight: '0.5rem' }}>
@@ -217,7 +356,7 @@ const AdminDashboard = () => {
             <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h2 style={{ fontSize: '1.8rem', margin: '0 0 0.25rem 0', color: 'var(--text-primary)' }}>{selectedStudentGroup.student.name}</h2>
-                <div style={{ color: 'var(--text-secondary)' }}>ID: {selectedStudentGroup.student._id} | {selectedStudentGroup.student.email}</div>
+                <div style={{ color: 'var(--text-secondary)' }}>{selectedStudentGroup.student.email}{selectedExamId !== 'all' ? ` • Filtered by exam` : ''}</div>
               </div>
               <button 
                 onClick={() => setSelectedStudentGroup(null)}
@@ -228,7 +367,7 @@ const AdminDashboard = () => {
             </div>
 
             <div style={{ padding: '2rem', overflowY: 'auto' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
                 <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
                   <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--danger)' }}>{selectedStudentGroup.total}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>Total 🚨</div>
@@ -240,10 +379,6 @@ const AdminDashboard = () => {
                 <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
                   <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--warning)' }}>{selectedStudentGroup.fullscreen}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Fullscreen ⚠️</div>
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--warning)' }}>{selectedStudentGroup.minimize}</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Minimize 📉</div>
                 </div>
               </div>
 
