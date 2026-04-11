@@ -29,6 +29,43 @@ const ReviewExam = () => {
   if (error) return <div className="page-container" style={{ textAlign: 'center', marginTop: '4rem', color: 'var(--danger)' }}>{error}</div>;
 
   const { attempt, violations } = data;
+
+  // Defined early so it can be used in the disqualification guard below
+  const mapViolationName = (type) => {
+    if (type === 'TAB_SWITCH' || type === 'tab-switch') return 'Tab switched';
+    if (type === 'FULLSCREEN_EXIT' || type === 'fullscreen-exit') return 'Fullscreen exited';
+    if (type === 'MINIMIZE' || type === 'window-blur') return 'Screen minimized';
+    return type;
+  };
+
+  // ── Guard: block review page for disqualified students ──
+  if (attempt.is_disqualified) {
+    return (
+      <div className="page-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <div className="glass-panel" style={{ padding: '3rem', maxWidth: '600px', textAlign: 'center', border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.05)' }}>
+          <div style={{ fontSize: '3.5rem', marginBottom: '1rem' }}>🚫</div>
+          <h1 style={{ fontSize: '2rem', color: 'var(--danger)', marginBottom: '1rem' }}>Disqualified</h1>
+          <p style={{ color: 'var(--text-primary)', fontSize: '1.05rem', lineHeight: '1.7', marginBottom: '1.5rem' }}>
+            You have been disqualified from this exam due to policy violations.<br />
+            <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Score and performance data are not available for disqualified attempts.</span>
+          </p>
+          {violations.length > 0 && (
+            <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '10px', padding: '1rem', marginBottom: '1.5rem', textAlign: 'left' }}>
+              <div style={{ fontWeight: '600', color: 'var(--warning)', marginBottom: '0.5rem' }}>⚠️ Recorded Violations ({violations.length})</div>
+              {violations.map((v, i) => (
+                <div key={i} style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', padding: '0.3rem 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  {mapViolationName(v.type)} — {new Date(v.timestamp).toLocaleTimeString()}
+                </div>
+              ))}
+            </div>
+          )}
+          <button onClick={() => navigate('/student')} className="btn-primary" style={{ padding: '0.75rem 2.5rem' }}>
+            <ArrowLeft size={16} style={{ marginRight: '0.4rem' }} /> Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
   const exam = attempt.exam;
 
   const totalQuestions = exam.questions.length;
@@ -55,12 +92,6 @@ const ReviewExam = () => {
     return acc;
   }, {});
 
-  const mapViolationName = (type) => {
-    if (type === 'TAB_SWITCH' || type === 'tab-switch') return 'Tab switched';
-    if (type === 'FULLSCREEN_EXIT' || type === 'fullscreen-exit') return 'Fullscreen exited';
-    if (type === 'MINIMIZE' || type === 'window-blur') return 'Screen minimized';
-    return type;
-  };
 
   // ── PDF Report Generation ──
   const generatePDF = () => {

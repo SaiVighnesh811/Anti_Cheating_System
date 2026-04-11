@@ -62,8 +62,20 @@ router.post('/:id/submit', protect, async (req, res) => {
       };
     });
 
+    // Calculate violations and disqualification
+    const allViolations = await ViolationLog.find({ attempt: attempt._id });
+    const tabSwitches = allViolations.filter(v => v.type === 'TAB_SWITCH' || v.type === 'tab-switch' || v.type === 'window-blur').length;
+    const fsExits = allViolations.filter(v => v.type === 'FULLSCREEN_EXIT' || v.type === 'fullscreen-exit').length;
+    
+    const violationCount = allViolations.length;
+    const suspicionScore = (tabSwitches * 10) + (fsExits * 15);
+    const isDisqualified = violationCount >= 5 || req.body.isDisqualified === true;
+
     attempt.answers = processedAnswers;
     attempt.score = score;
+    attempt.violation_count = violationCount;
+    attempt.suspicion_score = suspicionScore;
+    attempt.is_disqualified = isDisqualified;
     attempt.status = 'completed';
     attempt.completedAt = Date.now();
 
@@ -79,6 +91,9 @@ router.post('/:id/submit', protect, async (req, res) => {
 // @access  Private
 router.post('/:id/violation', protect, async (req, res) => {
   try {
+    if (req.user.role !== 'student') {
+      return res.status(200).json({ message: 'Admins are excluded from violation tracking' });
+    }
     let { type } = req.body;
     
     // Map legacy frontend types to new explicit backend types
@@ -104,6 +119,48 @@ router.post('/:id/violation', protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/attempts/live (Admin only)
+// @desc    Get all currently in-progress exam attempts for live proctoring
+// @access  Private/Admin
+router.get('/live', protect, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
+
+    const activeAttempts = await Attempt.find({ status: 'in-progress' })
+      .populate('student', 'name email role')
+      .populate('exam', 'title')
+      .sort('-startedAt');
+
+    // Filter to only include student attempts (safety check)
+    const studentAttempts = activeAttempts.filter(a => a.student && a.student.role === 'student');
+
+    // Attach violation counts for each attempt
+    const liveData = await Promise.all(
+      studentAttempts.map(async (attempt) => {
+        const allViolations = await ViolationLog.find({ attempt: attempt._id }).sort('-timestamp');
+        const tabSwitches = allViolations.filter(v => v.type === 'TAB_SWITCH' || v.type === 'tab-switch').length;
+        const fullscreenExits = allViolations.filter(v => v.type === 'FULLSCREEN_EXIT' || v.type === 'fullscreen-exit').length;
+        const lastViolationType = allViolations.length > 0 ? allViolations[0].type : null;
+
+        return {
+          attemptId: attempt._id,
+          student: attempt.student,
+          exam: attempt.exam,
+          startedAt: attempt.startedAt,
+          totalViolations: allViolations.length,
+          tabSwitches,
+          fullscreenExits,
+          lastViolationType
+        };
+      })
+    );
+
+    res.json(liveData);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // @route   GET /api/attempts/violations/all (Admin only)
 // @desc    Get all violation logs
 // @access  Private/Admin
@@ -111,7 +168,10 @@ router.get('/violations/all', protect, async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
     
-    const logs = await ViolationLog.find().populate('student', 'name email').populate('exam', 'title').sort('-timestamp');
+    const logs = await ViolationLog.find()
+      .populate('student', 'name email role')
+      .populate('exam', 'title')
+      .sort('-timestamp');
     res.json(logs);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -124,7 +184,10 @@ router.get('/violations/all', protect, async (req, res) => {
 router.get('/all', protect, async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
-    const attempts = await Attempt.find().populate('student', 'name email').populate('exam', 'title').sort('-createdAt');
+    const attempts = await Attempt.find()
+      .populate('student', 'name email role')
+      .populate('exam', 'title')
+      .sort('-createdAt');
     res.json(attempts);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -168,6 +231,26 @@ router.get('/:id/review', protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/attempts/:id/violations
+// @desc    Get violation list for a specific attempt (Student/Admin)
+// @access  Private
+router.get('/:id/violations', protect, async (req, res) => {
+  try {
+    const attempt = await Attempt.findById(req.params.id);
+    if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
+
+    // Allow student who owns the attempt OR an admin
+    if (attempt.student.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    const violations = await ViolationLog.find({ attempt: attempt._id }).sort('timestamp');
+    res.json(violations);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // @route   GET /api/attempts/violations/by-exam/:examId
 // @desc    Get violations for a specific exam (Admin only)
 // @access  Private/Admin
@@ -176,7 +259,7 @@ router.get('/violations/by-exam/:examId', protect, async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
     
     const logs = await ViolationLog.find({ exam: req.params.examId })
-      .populate('student', 'name email')
+      .populate('student', 'name email role')
       .populate('exam', 'title')
       .sort('-timestamp');
     res.json(logs);

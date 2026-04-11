@@ -9,6 +9,9 @@ const attemptSchema = new mongoose.Schema({
   }],
   score: { type: Number, default: 0 },
   status: { type: String, enum: ['in-progress', 'completed', 'terminated'], default: 'in-progress' },
+  is_disqualified: { type: Boolean, default: false },
+  violation_count: { type: Number, default: 0 },
+  suspicion_score: { type: Number, default: 0 },
   startedAt: { type: Date, default: Date.now },
   completedAt: { type: Date }
 }, { timestamps: true });

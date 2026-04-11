@@ -66,10 +66,10 @@ const StudentDashboard = () => {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {exams.map(exam => {
-                const alreadyTaken = myAttempts.some(a => a.exam._id === exam._id && a.status === 'completed');
-                const inProgress = myAttempts.find(a => a.exam._id === exam._id && a.status === 'in-progress');
-                
-                if (alreadyTaken) return null; // Hide already taken exams
+                const alreadyTaken = myAttempts.some(a => a.exam._id === exam._id && (a.status === 'completed' || a.is_disqualified));
+                const inProgress = myAttempts.find(a => a.exam._id === exam._id && a.status === 'in-progress' && !a.is_disqualified);
+
+                if (alreadyTaken) return null; // Hide already taken / disqualified exams
 
                 return (
                   <div key={exam._id} style={{ background: 'rgba(99, 102, 241, 0.05)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--surface-border)' }}>
@@ -108,17 +108,32 @@ const StudentDashboard = () => {
             <p style={{ color: 'var(--text-secondary)' }}>You haven't completed any exams yet.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {myAttempts.filter(a => a.status === 'completed').map(attempt => (
-                <div key={attempt._id} style={{ background: 'rgba(16, 185, 129, 0.05)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <h3 style={{ fontWeight: '500' }}>{attempt.exam?.title}</h3>
-                    <span style={{ fontWeight: '700', color: 'var(--success)' }}>Score: {attempt.score}</span>
+              {myAttempts.filter(a => a.status === 'completed' || a.is_disqualified).map(attempt => {
+                if (attempt.is_disqualified) {
+                  return (
+                    <div key={attempt._id} style={{ background: 'rgba(239, 68, 68, 0.06)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.35)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <h3 style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{attempt.exam?.title}</h3>
+                        <span style={{ background: 'rgba(239,68,68,0.18)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.4)', padding: '0.2rem 0.65rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: '700' }}>🚫 DISQUALIFIED</span>
+                      </div>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--danger)', margin: '0.4rem 0 0', lineHeight: '1.5' }}>
+                        You have been disqualified from this exam due to policy violations. Score is not available.
+                      </p>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={attempt._id} style={{ background: 'rgba(16, 185, 129, 0.05)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <h3 style={{ fontWeight: '500' }}>{attempt.exam?.title}</h3>
+                      <span style={{ fontWeight: '700', color: 'var(--success)' }}>Score: {attempt.score}</span>
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      Completed: {new Date(attempt.completedAt).toLocaleDateString()}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    Completed: {new Date(attempt.completedAt).toLocaleDateString()}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

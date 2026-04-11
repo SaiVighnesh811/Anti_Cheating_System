@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
 import examRoutes from './routes/exam.js';
 import attemptRoutes from './routes/attempt.js';
+import reportRoutes from './routes/report.js';
 
 dotenv.config();
 
@@ -18,6 +19,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/exams', examRoutes);
 app.use('/api/attempts', attemptRoutes);
+app.use('/api/report', reportRoutes);
 
 // Database Connection
 mongoose.connect(process.env.MONGODB_URI)
