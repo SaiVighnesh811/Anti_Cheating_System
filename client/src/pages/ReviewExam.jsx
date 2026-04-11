@@ -11,6 +11,12 @@ const ReviewExam = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Theme state
+  const [isDarkMode] = useState(() => {
+    const saved = localStorage.getItem('student-theme');
+    return saved === 'dark';
+  });
+
   useEffect(() => {
     const fetchReview = async () => {
       try {
@@ -195,118 +201,162 @@ const ReviewExam = () => {
   };
 
   return (
-    <div className="page-container" style={{ maxWidth: '900px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <button onClick={() => navigate('/student')} className="btn-secondary" style={{ padding: '0.5rem 1rem' }}>
-          <ArrowLeft size={18} style={{ marginRight: '0.5rem' }} /> Back to Dashboard
+    <div className="student-theme-provider" style={{ 
+      minHeight: '100vh',
+      backgroundColor: 'var(--bg-dashboard)',
+      color: 'var(--text-primary)',
+      transition: 'all 0.3s ease',
+      fontFamily: "'Inter', sans-serif"
+    }}>
+      <style>{`
+        .student-theme-provider {
+          --bg-dashboard: ${isDarkMode ? '#0f172a' : '#f8fafc'};
+          --surface-panel: ${isDarkMode ? '#1e293b' : '#ffffff'};
+          --surface-card: ${isDarkMode ? 'rgba(255, 255, 255, 0.03)' : '#ffffff'};
+          --card-hover: ${isDarkMode ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9'};
+          --text-primary: ${isDarkMode ? '#f1f5f9' : '#1e293b'};
+          --text-secondary: ${isDarkMode ? '#94a3b8' : '#64748b'};
+          --text-muted: ${isDarkMode ? '#64748b' : '#94a3b8'};
+          --surface-border: ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'};
+          --card-shadow: ${isDarkMode ? '0 4px 20px rgba(0, 0, 0, 0.4)' : '0 2px 12px rgba(0, 0, 0, 0.03)'};
+        }
+
+        .glass-panel {
+          background: var(--surface-panel) !important;
+          border: 1px solid var(--surface-border) !important;
+          box-shadow: var(--card-shadow) !important;
+        }
+      `}</style>
+      <div className="page-container" style={{ maxWidth: '1000px', padding: '2rem', animation: 'fadeIn 0.6s ease-out' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem', flexWrap: 'wrap', gap: '1.5rem' }}>
+        <button onClick={() => navigate('/student')} className="btn-secondary" style={{ padding: '0.75rem 1.25rem', fontWeight: '600' }}>
+          <ArrowLeft size={18} style={{ marginRight: '0.5rem' }} /> Candidate Dashboard
         </button>
-        <button onClick={generatePDF} className="btn-primary" style={{ padding: '0.6rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Download size={18} /> Download PDF Report
+        <button onClick={generatePDF} className="btn-primary" style={{ padding: '0.75rem 1.75rem', display: 'flex', alignItems: 'center', gap: '0.6rem', fontWeight: '700' }}>
+          <Download size={20} /> Download Session Report
         </button>
       </div>
 
-      <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-        <h1 className="page-title" style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>Exam Review</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>{exam.title}</p>
+      <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
+        <div style={{ display: 'inline-block', background: 'var(--primary-light)', color: 'var(--primary)', padding: '0.5rem 1.25rem', borderRadius: '999px', fontSize: '0.85rem', fontWeight: '800', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+           Session Review
+        </div>
+        <h1 style={{ fontSize: '3rem', fontWeight: '800', color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.04em' }}>Performance Feedback</h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '1.25rem', marginTop: '0.75rem', fontWeight: '500' }}>{exam.title}</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
-        <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <BarChart2 size={32} color="var(--primary)" style={{ marginBottom: '1rem' }} />
-          <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-primary)' }}>{percentage}%</div>
-          <div style={{ color: 'var(--text-secondary)' }}>Total Score</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem', marginBottom: '4rem' }}>
+        <div className="glass-panel" style={{ padding: '2.5rem', textAlign: 'center' }}>
+          <div style={{ background: 'var(--primary-light)', width: '60px', height: '60px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+             <BarChart2 size={32} color="var(--primary)" />
+          </div>
+          <div style={{ fontSize: '2.5rem', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{percentage}<span style={{ fontSize: '1.25rem', color: 'var(--text-muted)' }}>%</span></div>
+          <div style={{ color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.1em', marginTop: '0.5rem' }}>Proficiency Score</div>
         </div>
 
-        <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-          <CheckCircle size={32} color="var(--success)" style={{ marginBottom: '1rem' }} />
-          <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--success)' }}>{correctCount}</div>
-          <div style={{ color: 'var(--text-secondary)' }}>Correct Answers ✅</div>
+        <div className="glass-panel" style={{ padding: '2.5rem', textAlign: 'center', border: `1px solid ${isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.1)'}` }}>
+          <div style={{ background: '#f0fdf4', width: '60px', height: '60px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+             <CheckCircle size={32} color="#16a34a" />
+          </div>
+          <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#16a34a' }}>{correctCount}</div>
+          <div style={{ color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.1em', marginTop: '0.5rem' }}>Accurate Sessions</div>
         </div>
 
-        <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-          <XCircle size={32} color="var(--danger)" style={{ marginBottom: '1rem' }} />
-          <div style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--danger)' }}>{wrongCount}</div>
-          <div style={{ color: 'var(--text-secondary)' }}>Wrong Answers ❌</div>
+        <div className="glass-panel" style={{ padding: '2.5rem', textAlign: 'center', border: `1px solid ${isDarkMode ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)'}` }}>
+          <div style={{ background: '#fef2f2', width: '60px', height: '60px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+             <XCircle size={32} color="#dc2626" />
+          </div>
+          <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#dc2626' }}>{wrongCount}</div>
+          <div style={{ color: 'var(--text-secondary)', fontWeight: '600', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.1em', marginTop: '0.5rem' }}>Incorrect Inputs</div>
         </div>
       </div>
 
-      <div className="glass-panel" style={{ padding: '2rem', marginBottom: '3rem', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-          <AlertTriangle size={24} color="var(--warning)" />
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '600' }}>Violation Summary 🚨</h2>
+      <div className="glass-panel" style={{ padding: '2.5rem', marginBottom: '4rem', border: `1.5px solid ${isDarkMode ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.1)'}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+          <div style={{ background: 'var(--warning-light)', padding: '0.6rem', borderRadius: '12px' }}>
+            <AlertTriangle size={24} color="var(--warning)" />
+          </div>
+          <h2 style={{ fontSize: '1.75rem', fontWeight: '800', color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>Integrity Profile</h2>
         </div>
         
-        <div style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>
-          Total Violations: <strong style={{ color: 'var(--warning)' }}>{violations.length}</strong>
+        <div style={{ fontSize: '1.1rem', marginBottom: '1.5rem', color: 'var(--text-secondary)', fontWeight: '500' }}>
+          Total Monitored Incidents: <strong style={{ color: violations.length > 0 ? 'var(--warning)' : 'var(--success)', fontSize: '1.3rem' }}>{violations.length}</strong>
         </div>
 
         {violations.length > 0 ? (
-          <ul style={{ listStyleType: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {Object.entries(violationCounts).map(([type, count]) => (
-              <li key={type} style={{ background: 'rgba(255,255,255,0.05)', padding: '0.75rem 1rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-primary)' }}>{mapViolationName(type)}</span>
-                <span style={{ fontWeight: '600', color: 'var(--warning)' }}>{count} time{count > 1 ? 's' : ''}</span>
-              </li>
+              <div key={type} style={{ background: isDarkMode ? 'rgba(255, 252, 232, 0.05)' : '#fefce8', padding: '1rem 1.5rem', borderRadius: '14px', border: `1px solid ${isDarkMode ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.2)'}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: isDarkMode ? '#fef08a' : 'var(--text-primary)', fontWeight: '600', fontSize: '0.95rem' }}>{mapViolationName(type)}</span>
+                <span style={{ fontWeight: '800', color: isDarkMode ? '#fef08a' : 'var(--warning)', background: isDarkMode ? 'rgba(0,0,0,0.2)' : '#fff', padding: '0.25rem 0.75rem', borderRadius: '8px', fontSize: '0.85rem' }}>{count} Detected</span>
+              </div>
             ))}
-          </ul>
+          </div>
         ) : (
-          <div style={{ color: 'var(--success)' }}>Perfect integrity! No violations detected.</div>
+          <div style={{ background: '#f0fdf4', color: '#16a34a', padding: '1.25rem', borderRadius: '14px', fontWeight: '700', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <CheckCircle size={24} /> Optimal integrity maintained throughout the session.
+          </div>
         )}
       </div>
 
-      <h2 style={{ fontSize: '1.8rem', fontWeight: '700', marginBottom: '2rem' }}>Detailed Review</h2>
+      <div style={{ borderBottom: '2px solid var(--primary-light)', paddingBottom: '1rem', marginBottom: '2.5rem' }}>
+        <h2 style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>Detailed Assessment Review</h2>
+      </div>
       
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
         {reviewData.map((data, idx) => {
           if (!data) return null;
           const { question, answer, isCorrect } = data;
           
           return (
-            <div key={question._id} className="glass-panel" style={{ padding: '2rem', border: isCorrect ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)' }}>
-              <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+            <div key={question._id} className="glass-panel" style={{ padding: '2.5rem', border: isCorrect ? `1.5px solid ${isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(22, 163, 74, 0.1)'}` : `1.5px solid ${isDarkMode ? 'rgba(239, 68, 68, 0.2)' : 'rgba(220, 38, 38, 0.1)'}` }}>
+              <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', marginBottom: '2rem' }}>
                 <span style={{ 
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', 
-                  background: isCorrect ? 'var(--success)' : 'var(--danger)', color: 'white', borderRadius: '50%', fontWeight: '600', flexShrink: 0 
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', 
+                  background: isCorrect ? '#16a34a' : '#ef4444', color: 'white', borderRadius: '12px', fontWeight: '800', fontSize: '1.1rem', flexShrink: 0 
                 }}>
                   {idx + 1}
                 </span>
-                <h3 style={{ fontSize: '1.15rem', lineHeight: '1.5', margin: 0, paddingTop: '3px' }}>
+                <h3 style={{ fontSize: '1.3rem', lineHeight: '1.5', margin: 0, paddingTop: '4px', fontWeight: '600', color: 'var(--text-primary)' }}>
                   {question.questionText}
                 </h3>
               </div>
               
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '3rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingLeft: '4.5rem' }}>
                 {question.options.map((opt, optIndex) => {
                   const isSelected = answer && answer.selectedOptionIndex === optIndex;
                   const isActuallyCorrect = question.correctOptionIndex === optIndex;
                   
-                  let bgColor = 'rgba(255,255,255,0.02)';
+                  let bgColor = isDarkMode ? 'rgba(255,255,255,0.02)' : '#fbfcfd';
                   let borderColor = 'var(--surface-border)';
+                  let icon = null;
                   
                   if (isActuallyCorrect) {
-                    bgColor = 'rgba(16, 185, 129, 0.15)';
-                    borderColor = 'rgba(16, 185, 129, 0.5)';
+                    bgColor = isDarkMode ? 'rgba(22, 163, 74, 0.1)' : '#f0fdf4';
+                    borderColor = isDarkMode ? 'rgba(22, 163, 74, 0.4)' : '#bbf7d0';
+                    icon = <CheckCircle size={20} color={isDarkMode ? '#4ade80' : '#16a34a'} />;
                   } else if (isSelected && !isActuallyCorrect) {
-                    bgColor = 'rgba(239, 68, 68, 0.15)';
-                    borderColor = 'rgba(239, 68, 68, 0.5)';
+                    bgColor = isDarkMode ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2';
+                    borderColor = isDarkMode ? 'rgba(239, 68, 68, 0.4)' : '#fecaca';
+                    icon = <XCircle size={20} color={isDarkMode ? '#f87171' : '#dc2626'} />;
                   }
                   
                   return (
                     <div 
                       key={optIndex} 
                       style={{ 
-                        padding: '1rem', 
-                        borderRadius: '8px', 
-                        border: `1px solid ${borderColor}`,
+                        padding: '1.1rem 1.5rem', 
+                        borderRadius: '14px', 
+                        border: `1.5px solid ${borderColor}`,
                         background: bgColor,
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center'
+                        alignItems: 'center',
+                        transition: 'all 0.2s ease'
                       }}
                     >
-                      <span style={{ fontSize: '1rem' }}>{opt}</span>
-                      {isActuallyCorrect && <CheckCircle size={20} color="var(--success)" />}
-                      {isSelected && !isActuallyCorrect && <XCircle size={20} color="var(--danger)" />}
+                      <span style={{ fontSize: '1.05rem', fontWeight: (isSelected || isActuallyCorrect) ? '600' : '400', color: 'var(--text-primary)' }}>{opt}</span>
+                      {icon}
                     </div>
                   );
                 })}
@@ -316,7 +366,8 @@ const ReviewExam = () => {
         })}
       </div>
     </div>
-  );
+  </div>
+);
 };
 
 export default ReviewExam;

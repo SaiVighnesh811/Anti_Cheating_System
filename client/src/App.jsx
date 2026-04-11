@@ -12,6 +12,7 @@ import CreateExam from './pages/CreateExam';
 import StudentDashboard from './pages/StudentDashboard';
 import TakeExam from './pages/TakeExam';
 import ReviewExam from './pages/ReviewExam';
+import { ToastProvider } from './context/ToastContext';
 
 const ProtectedRoute = ({ children, roleRequired }) => {
   const { user, loading } = useAuth();
@@ -25,30 +26,32 @@ const ProtectedRoute = ({ children, roleRequired }) => {
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        
-        <Route path="/admin" element={
-          <ProtectedRoute roleRequired="admin"><AdminDashboard /></ProtectedRoute>
-        } />
-        <Route path="/admin/create-exam" element={
-          <ProtectedRoute roleRequired="admin"><CreateExam /></ProtectedRoute>
-        } />
-        
-        <Route path="/student" element={
-          <ProtectedRoute roleRequired="student"><StudentDashboard /></ProtectedRoute>
-        } />
-        <Route path="/student/exam/:id" element={
-          <ProtectedRoute roleRequired="student"><TakeExam /></ProtectedRoute>
-        } />
-        <Route path="/student/review/:id" element={
-          <ProtectedRoute roleRequired="student"><ReviewExam /></ProtectedRoute>
-        } />
-      </Routes>
-    </Router>
+    <ToastProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          
+          <Route path="/admin" element={
+            <ProtectedRoute roleRequired="admin"><AdminDashboard /></ProtectedRoute>
+          } />
+          <Route path="/admin/create-exam" element={
+            <ProtectedRoute roleRequired="admin"><CreateExam /></ProtectedRoute>
+          } />
+          
+          <Route path="/student" element={
+            <ProtectedRoute roleRequired="student"><StudentDashboard /></ProtectedRoute>
+          } />
+          <Route path="/student/exam/:id" element={
+            <ProtectedRoute roleRequired="student"><TakeExam /></ProtectedRoute>
+          } />
+          <Route path="/student/review/:id" element={
+            <ProtectedRoute roleRequired="student"><ReviewExam /></ProtectedRoute>
+          } />
+        </Routes>
+      </Router>
+    </ToastProvider>
   );
 }
 

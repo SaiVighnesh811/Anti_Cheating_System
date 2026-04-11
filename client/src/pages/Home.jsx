@@ -29,74 +29,74 @@ const Home = () => {
   }, []);
 
   return (
-    <div className="home-container">
+    <div className="home-container" style={{ background: '#fff' }}>
       {/* Background Shapes */}
       <div className="bg-shape shape-1"></div>
       <div className="bg-shape shape-2"></div>
       <div className="bg-shape shape-3"></div>
 
       {/* Navigation */}
-      <nav className="home-nav">
+      <nav className="home-nav" style={{ background: 'rgba(255,255,255,0.7)' }}>
         <div className="nav-logo">
-          <ShieldCheck size={28} color="#a78bfa" />
-          <span>SmartExams</span>
+          <ShieldCheck size={30} color="var(--primary)" />
+          <span>ProctorVision</span>
         </div>
         <div className="nav-links">
-          <button className="btn-secondary" onClick={() => navigate('/login')}>
-            Log In
+          <button className="btn-secondary" onClick={() => navigate('/login')} style={{ fontWeight: '700' }}>
+            Portal Access
           </button>
-          <button className="btn-primary" onClick={() => navigate('/register')}>
-            Sign Up
+          <button className="btn-primary" onClick={() => navigate('/register')} style={{ padding: '0.6rem 1.5rem', fontWeight: '700' }}>
+            Initialize Registration
           </button>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="hero-section">
-        <div className="hero-badge">✨ Next-Generation Assessment Platform</div>
-        <h1 className="hero-title">Secure & Smart Exam Integrity System</h1>
+      <section className="hero-section" style={{ animation: 'fadeIn 1s ease-out' }}>
+        <div className="hero-badge">Next-Generation Assessment Integrity</div>
+        <h1 className="hero-title">Secure & Intelligent Proctored Exams</h1>
         <p className="hero-subtitle">
-          Conduct online examinations with confidence. Our advanced platform ensures authenticity using real-time monitoring and intelligent anti-cheat detection, providing a seamless and secure experience for both instructors and students.
+          Engineered for academic integrity. Our platform combines real-time monitoring with advanced anti-cheat detection to ensure a transparent and secure examination environment.
         </p>
         <div className="hero-buttons">
-          <button className="btn-primary" style={{ padding: '1rem 2.5rem', fontSize: '1.1rem' }} onClick={() => navigate('/register')}>
-            Get Started <Zap size={20} />
+          <button className="btn-primary" style={{ padding: '1.1rem 2.5rem', fontSize: '1rem', fontWeight: '700' }} onClick={() => navigate('/register')}>
+            Get Started Professional <Zap size={18} style={{ marginLeft: '0.5rem' }} />
           </button>
-          <button className="btn-secondary" style={{ padding: '1rem 2.5rem', fontSize: '1.1rem' }} onClick={() => {
+          <button className="btn-secondary" style={{ padding: '1.1rem 2.5rem', fontSize: '1rem', fontWeight: '700' }} onClick={() => {
             featuresRef.current?.scrollIntoView({ behavior: 'smooth' });
           }}>
-            Learn More
+            Platform Capabilities
           </button>
         </div>
       </section>
 
       {/* Features Section */}
       <section className="features-section" ref={featuresRef}>
-        <h2 className="section-title">Powerful Capabilities</h2>
+        <h2 className="section-title" style={{ fontSize: '2.5rem', fontWeight: '800', letterSpacing: '-0.02em' }}>Advanced Security Stack</h2>
         <div className="features-grid">
           
-          <div className="glass-panel feature-card" style={{ animationDelay: '0.1s' }}>
+          <div className="glass-panel feature-card" style={{ background: '#fff', border: '1.5px solid rgba(0,0,0,0.03)', animationDelay: '0.1s' }}>
             <div className="feature-icon-wrapper">
-              <Eye size={32} />
+              <Eye size={28} />
             </div>
-            <h3 className="feature-title">Real-Time Monitoring 👁️</h3>
-            <p className="feature-desc">Active observation algorithms keep track of student activities throughout the duration of the examination.</p>
+            <h3 className="feature-title">Real-Time Surveillance</h3>
+            <p className="feature-desc">Active algorithms monitor candidate behavior throughout the session, ensuring continuous integrity verification.</p>
           </div>
           
-          <div className="glass-panel feature-card" style={{ animationDelay: '0.2s' }}>
+          <div className="glass-panel feature-card" style={{ background: '#fff', border: '1.5px solid rgba(0,0,0,0.03)', animationDelay: '0.2s' }}>
             <div className="feature-icon-wrapper">
-              <ShieldCheck size={32} />
+              <ShieldCheck size={28} />
             </div>
-            <h3 className="feature-title">Tab Switch Detection 🚫</h3>
-            <p className="feature-desc">Prevents and records unauthorized navigation out of the exam environment, ensuring strict test conditions.</p>
+            <h3 className="feature-title">Navigation Lockdown</h3>
+            <p className="feature-desc">Prevents unauthorized window or tab switching, enforcing a dedicated focus environment for all assessments.</p>
           </div>
 
-          <div className="glass-panel feature-card" style={{ animationDelay: '0.3s' }}>
+          <div className="glass-panel feature-card" style={{ background: '#fff', border: '1.5px solid rgba(0,0,0,0.03)', animationDelay: '0.3s' }}>
             <div className="feature-icon-wrapper">
-              <Lock size={32} />
+              <Lock size={28} />
             </div>
-            <h3 className="feature-title">Secure Fullscreen 🔒</h3>
-            <p className="feature-desc">Enforces a mandatory fullscreen lockdown mode, logging immediate violations if the exam window is minimized.</p>
+            <h3 className="feature-title">Mandatory Fullscreen</h3>
+            <p className="feature-desc">Enforces full-screen mode globally, logging violations immediately if the secure environment is compromised.</p>
           </div>
 
         </div>
@@ -104,7 +104,7 @@ const Home = () => {
 
       {/* Footer */}
       <footer className="home-footer">
-        <p>&copy; {new Date().getFullYear()} SmartExams Integrity System. All rights reserved.</p>
+        <p style={{ fontWeight: '500', color: 'var(--text-muted)' }}>&copy; {new Date().getFullYear()} ProctorVision Integrity Solutions. Engineering Academic Excellence.</p>
       </footer>
     </div>
   );

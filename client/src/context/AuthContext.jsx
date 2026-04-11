@@ -29,6 +29,13 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       const { data } = await api.post('/auth/login', { email, password });
+      
+      // Clear any existing stale session tokens before setting new ones
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('studentToken');
+      localStorage.removeItem('adminUser');
+      localStorage.removeItem('studentUser');
+
       setUser(data);
       if (data.role === 'admin') {
         localStorage.setItem('adminUser', JSON.stringify(data));
@@ -39,7 +46,13 @@ export const AuthProvider = ({ children }) => {
       }
       return data;
     } catch (error) {
-      throw error.response?.data?.message || 'Login failed';
+      if (error.response?.status === 401) {
+        throw 'Invalid credentials. Please check your email and password.';
+      }
+      if (error.response?.status >= 500) {
+        throw 'Server error. Please try again later.';
+      }
+      throw error.response?.data?.message || 'Login failed. Please check your connection.';
     }
   };
 
