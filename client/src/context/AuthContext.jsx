@@ -11,13 +11,16 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const isAdminPage = window.location.pathname.startsWith('/admin');
-    let storedUserStr = isAdminPage 
-      ? localStorage.getItem('adminUser') 
-      : localStorage.getItem('studentUser');
-    
+    const isSuperAdminPage = window.location.pathname.startsWith('/superadmin');
+
+    let storedUserStr;
+    if (isAdminPage) storedUserStr = localStorage.getItem('adminUser');
+    else if (isSuperAdminPage) storedUserStr = localStorage.getItem('superAdminUser');
+    else storedUserStr = localStorage.getItem('studentUser');
+
     // Fallback if not on designated explicit paths
     if (!storedUserStr && window.location.pathname === '/') {
-        storedUserStr = localStorage.getItem('studentUser') || localStorage.getItem('adminUser');
+      storedUserStr = localStorage.getItem('studentUser') || localStorage.getItem('adminUser') || localStorage.getItem('superAdminUser');
     }
 
     if (storedUserStr) {
@@ -29,17 +32,16 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       const { data } = await api.post('/auth/login', { email, password });
-      
-      // Clear any existing stale session tokens before setting new ones
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('studentToken');
-      localStorage.removeItem('adminUser');
-      localStorage.removeItem('studentUser');
+
+
 
       setUser(data);
       if (data.role === 'admin') {
         localStorage.setItem('adminUser', JSON.stringify(data));
         localStorage.setItem('adminToken', data.token);
+      } else if (data.role === 'superadmin') {
+        localStorage.setItem('superAdminUser', JSON.stringify(data));
+        localStorage.setItem('superAdminToken', data.token);
       } else {
         localStorage.setItem('studentUser', JSON.stringify(data));
         localStorage.setItem('studentToken', data.token);
@@ -74,11 +76,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    const isAdmin = user?.role === 'admin';
+    const role = user?.role;
     setUser(null);
-    if (isAdmin) {
+    if (role === 'admin') {
       localStorage.removeItem('adminUser');
       localStorage.removeItem('adminToken');
+    } else if (role === 'superadmin') {
+      localStorage.removeItem('superAdminUser');
+      localStorage.removeItem('superAdminToken');
     } else {
       localStorage.removeItem('studentUser');
       localStorage.removeItem('studentToken');

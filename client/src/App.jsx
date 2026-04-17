@@ -5,9 +5,13 @@ import { useAuth } from './context/AuthContext';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import VerifyOTP from './pages/VerifyOTP';
+import ResetPassword from './pages/ResetPassword';
 
 import AdminDashboard from './pages/AdminDashboard';
 import CreateExam from './pages/CreateExam';
+import SuperAdminDashboard from './pages/SuperAdminDashboard';
 
 import StudentDashboard from './pages/StudentDashboard';
 import TakeExam from './pages/TakeExam';
@@ -19,7 +23,7 @@ const ProtectedRoute = ({ children, roleRequired }) => {
   
   if (loading) return <div className="page-container" style={{textAlign: 'center', marginTop: '4rem'}}>Loading...</div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (roleRequired && user.role !== roleRequired) return <Navigate to="/" replace />;
+  if (roleRequired && user.role !== roleRequired && user.role !== 'superadmin') return <Navigate to="/" replace />;
   
   return children;
 };
@@ -32,12 +36,22 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/verify-otp" element={<VerifyOTP />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           
           <Route path="/admin" element={
             <ProtectedRoute roleRequired="admin"><AdminDashboard /></ProtectedRoute>
           } />
           <Route path="/admin/create-exam" element={
             <ProtectedRoute roleRequired="admin"><CreateExam /></ProtectedRoute>
+          } />
+          <Route path="/admin/edit-exam/:id" element={
+            <ProtectedRoute roleRequired="admin"><CreateExam /></ProtectedRoute>
+          } />
+          
+          <Route path="/superadmin-dashboard" element={
+            <ProtectedRoute roleRequired="superadmin"><SuperAdminDashboard /></ProtectedRoute>
           } />
           
           <Route path="/student" element={

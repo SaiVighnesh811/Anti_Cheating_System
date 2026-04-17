@@ -62,17 +62,33 @@ const TakeExam = () => {
 
         setAttempt(currentAttempt);
         const { data: examData } = await api.get(`/exams/${currentAttempt.exam._id}`);
+
+        if (examData.endTime && new Date() > new Date(examData.endTime)) {
+          alert('This exam has ended');
+          return navigate('/student');
+        }
+
         setExam(examData);
 
         const initialAnswers = examData.questions.map(q => ({
           questionId: q._id,
-          selectedOptionIndex: null
+          selectedOptionIndex: null,
+          fillText: ''
         }));
         setAnswers(initialAnswers);
 
-        const elapsed = (Date.now() - new Date(currentAttempt.startedAt).getTime()) / 1000;
-        const totalSeconds = examData.durationMinutes * 60;
-        const remaining = Math.max(0, totalSeconds - elapsed);
+        // TIMER FIX: remaining = examEndTime - now, where examEndTime = startTime + duration
+        // This ensures late starters get LESS time, not the full duration
+        let examEndMs;
+        if (examData.endTime) {
+          examEndMs = new Date(examData.endTime).getTime();
+        } else if (examData.startTime && examData.durationMinutes) {
+          examEndMs = new Date(examData.startTime).getTime() + (examData.durationMinutes * 60000);
+        } else {
+          // No scheduled window set — give full duration from student's own start
+          examEndMs = new Date(currentAttempt.startedAt).getTime() + (examData.durationMinutes * 60000);
+        }
+        const remaining = Math.max(0, (examEndMs - Date.now()) / 1000);
         setTimeLeft(Math.floor(remaining));
 
       } catch (err) {
@@ -164,36 +180,46 @@ const TakeExam = () => {
     }
 
     const timer = setInterval(() => {
-      const now = new Date();
-      const end = exam?.endTime ? new Date(exam.endTime) : null;
-      
-      // Absolute expiry check (Scheduling enforcement)
-      if (end && now >= end && !submitting) {
+      const nowMs = Date.now();
+
+      // Compute global exam window end
+      let finalEndMs;
+      if (exam?.endTime) {
+        finalEndMs = new Date(exam.endTime).getTime();
+      } else if (exam?.startTime && exam?.durationMinutes) {
+        finalEndMs = new Date(exam.startTime).getTime() + (exam.durationMinutes * 60000);
+      } else {
+        finalEndMs = new Date(attempt?.startedAt).getTime() + ((exam?.durationMinutes || 0) * 60000);
+      }
+
+      if (nowMs >= finalEndMs && !submitting) {
         clearInterval(timer);
-        submittingRef.current = true; // Block double submission
+        submittingRef.current = true;
         setSubmitting(true);
         setExamActive(false);
         setWarningQueue([]);
         dismissWarning();
-        
-        api.post(`/attempts/${attemptId}/submit`, { 
-          answers, 
-          submissionType: 'AUTO_WINDOW_EXPIRY' 
+
+        api.post(`/attempts/${attemptId}/submit`, {
+          answers,
+          submissionType: 'AUTO_WINDOW_EXPIRY'
         }).then(() => {
           navigate(`/student/review/${attemptId}`);
         }).catch(err => {
-          console.error("Auto expiry submission failed", err);
+          console.error('Auto expiry submission failed', err);
           navigate('/student');
         });
         return;
       }
 
-      setTimeLeft(prev => prev - 1);
-      setTimerTick(t => !t); // toggle to trigger CSS animation
+      // Recompute from wall clock every tick — refresh-safe and drift-free
+      const remaining = Math.max(0, Math.floor((finalEndMs - nowMs) / 1000));
+      setTimeLeft(remaining);
+      setTimerTick(t => !t);
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLeft, submitting, exam, attemptId, answers, dismissWarning, navigate]);
+  }, [timeLeft, submitting, exam, attempt, attemptId, answers, dismissWarning, navigate]);
 
   // Auto Disqualification (Logic Unchanged)
   useEffect(() => {
@@ -222,6 +248,12 @@ const TakeExam = () => {
   const handleOptionSelect = (qId, optionIndex) => {
     setAnswers(prev => prev.map(a =>
       a.questionId === qId ? { ...a, selectedOptionIndex: optionIndex } : a
+    ));
+  };
+
+  const handleTextFill = (qId, value) => {
+    setAnswers(prev => prev.map(a =>
+      a.questionId === qId ? { ...a, fillText: value } : a
     ));
   };
 
@@ -309,7 +341,7 @@ const TakeExam = () => {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const answeredCount = answers.filter(a => a.selectedOptionIndex !== null).length;
+  const answeredCount = answers.filter(a => a.selectedOptionIndex !== null || (a.fillText && a.fillText.trim().length > 0)).length;
 
   if (loading || !exam) return (
     <div className="page-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh' }}>
@@ -344,7 +376,7 @@ const TakeExam = () => {
         <div className="glass-panel" style={{ padding: '3.5rem', maxWidth: '650px', textAlign: 'center' }}>
           <h1 style={{ fontSize: '2.25rem', marginBottom: '0.75rem', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{exam.title}</h1>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '2.5rem', fontSize: '1.1rem', lineHeight: '1.6' }}>{exam.description}</p>
-          
+
           <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', marginBottom: '2.5rem' }}>
             <div style={{ background: 'var(--primary-light)', padding: '1.25rem', borderRadius: '16px', minWidth: '120px', border: '1px solid rgba(13,148,136,0.1)' }}>
               <span style={{ display: 'block', fontSize: '1.75rem', fontWeight: '800', color: 'var(--primary)' }}>{exam.durationMinutes}m</span>
@@ -395,7 +427,7 @@ const TakeExam = () => {
   }
 
   return (
-    <div className="student-theme-provider" style={{ 
+    <div className="student-theme-provider" style={{
       minHeight: '100vh',
       backgroundColor: 'var(--bg-dashboard)',
       color: 'var(--text-primary)',
@@ -429,226 +461,255 @@ const TakeExam = () => {
         }
       `}</style>
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* ── Visual Feedback Overlays ── */}
-      {showViolationGlow && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, pointerEvents: 'none', animation: 'screenGlowAnim 1.5s forwards' }} />
-      )}
+        {/* ── Visual Feedback Overlays ── */}
+        {showViolationGlow && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2000, pointerEvents: 'none', animation: 'screenGlowAnim 1.5s forwards' }} />
+        )}
 
-      {/* ── Warning Modals (Logic Unchanged) ── */}
-      {activeWarningType && (
-        <div className="warning-overlay">
-          <div className={`glass-panel warning-modal warning-popup ${activeWarningType === 'tab-switch' ? 'warning-shake' : ''}`} style={{ border: 'none', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-            <AlertTriangle size={80} color={activeWarningType === 'tab-switch' ? 'var(--danger)' : 'var(--warning)'} style={{ marginBottom: '1.5rem' }} />
-            <h2 style={{ fontSize: '2.25rem', fontWeight: '800', color: 'var(--text-primary)', marginBottom: '1rem' }}>
-              {activeWarningType === 'tab-switch' ? 'Policy Violation' : 'Session Interrupted'}
-            </h2>
-            <p style={{ fontSize: '1.2rem', marginBottom: '2.5rem', color: 'var(--text-secondary)', fontWeight: '500', lineHeight: '1.4' }}>
-              {activeWarningType === 'tab-switch'
-                ? 'Unauthorized tab or window switch detected.'
-                : 'Steady focus required. Fullscreen mode must be maintained.'}
-            </p>
-            <button
-              onClick={() => { setWarningQueue(prev => prev.slice(1)); dismissWarning(); if (activeWarningType === 'fullscreen-exit') document.documentElement.requestFullscreen().catch(e => console.log(e)); }}
-              className="btn-primary"
-              style={{ width: '100%', padding: '1.2rem', fontSize: '1.1rem', background: activeWarningType === 'tab-switch' ? 'var(--danger)' : 'var(--warning)' }}
-            >
-              Resume Secure Session
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Sticky Header ── */}
-      <header className="glass-panel" style={{ position: 'sticky', top: 0, zIndex: 100, borderRadius: 0, borderTop: 'none', borderLeft: 'none', borderRight: 'none', padding: '0 2rem', height: '70px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.3s ease' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          <div className={`violation-counter ${timeLeft < 300 ? 'active-pulse' : ''}`} style={{ background: timeLeft < 300 ? 'rgba(239, 68, 68, 0.1)' : 'var(--primary-light)', color: timeLeft < 300 ? 'var(--danger)' : 'var(--primary)', borderColor: timeLeft < 300 ? 'var(--danger)' : 'var(--primary)', transition: 'none' }}>
-            <Clock size={18} style={{ animation: 'timerTick 1s infinite' }} />
-            <span style={{ fontSize: '1.25rem', letterSpacing: '0.05em' }}>{formatTime(timeLeft)}</span>
-          </div>
-
-        </div>
-
-        <div style={{ textAlign: 'center' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>{exam.title}</h2>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '500' }}>Candidate: {user?.name}</span>
-        </div>
-
-        <button className="btn-primary" onClick={handleFinalSubmit} disabled={submitting} style={{ padding: '0.75rem 1.5rem', fontSize: '0.9rem' }}>
-          <Send size={16} /> Final Submission
-        </button>
-      </header>
-
-      {/* ── Main Layout ── */}
-      <main style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 340px', padding: '2rem', gap: '2rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
-
-        {/* Left: Questions Section */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-
-          {/* Question Navigator */}
-          <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-muted)', marginRight: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Questions</span>
-            {exam.questions.map((q, idx) => {
-              const isAnswered = answers.find(a => a.questionId === q._id)?.selectedOptionIndex !== null;
-              const isCurrent = idx === currentQuestion;
-              return (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentQuestion(idx)}
-                  style={{
-                    width: '38px', height: '38px', borderRadius: '10px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer',
-                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                    background: isCurrent ? 'var(--primary)' : isAnswered ? 'var(--primary-light)' : (isDarkMode ? 'rgba(255,255,255,0.03)' : '#f8fafc'),
-                    color: isCurrent ? '#fff' : isAnswered ? 'var(--primary)' : 'var(--text-muted)',
-                    border: '1.5px solid',
-                    borderColor: isCurrent ? 'var(--primary)' : isAnswered ? 'var(--primary)' : 'var(--surface-border)',
-                    boxShadow: isCurrent ? '0 4px 12px rgba(13,148,136,0.3)' : 'none'
-                  }}
-                  onMouseOver={e => !isCurrent && (e.currentTarget.style.borderColor = 'var(--primary)')}
-                  onMouseOut={e => !isCurrent && (e.currentTarget.style.borderColor = isAnswered ? 'var(--primary)' : 'rgba(0,0,0,0.06)')}
-                >
-                  {idx + 1}
-                </button>
-              );
-            })}
-            <div style={{ marginLeft: 'auto', background: '#f1f5f9', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>
-              Progress: {answeredCount} / {exam.questions.length}
+        {/* ── Warning Modals (Logic Unchanged) ── */}
+        {activeWarningType && (
+          <div className="warning-overlay">
+            <div className={`glass-panel warning-modal warning-popup ${activeWarningType === 'tab-switch' ? 'warning-shake' : ''}`} style={{ border: 'none', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+              <AlertTriangle size={80} color={activeWarningType === 'tab-switch' ? 'var(--danger)' : 'var(--warning)'} style={{ marginBottom: '1.5rem' }} />
+              <h2 style={{ fontSize: '2.25rem', fontWeight: '800', color: 'var(--text-primary)', marginBottom: '1rem' }}>
+                {activeWarningType === 'tab-switch' ? 'Policy Violation' : 'Session Interrupted'}
+              </h2>
+              <p style={{ fontSize: '1.2rem', marginBottom: '2.5rem', color: 'var(--text-secondary)', fontWeight: '500', lineHeight: '1.4' }}>
+                {activeWarningType === 'tab-switch'
+                  ? 'Unauthorized tab or window switch detected.'
+                  : 'Steady focus required. Fullscreen mode must be maintained.'}
+              </p>
+              <button
+                onClick={() => { setWarningQueue(prev => prev.slice(1)); dismissWarning(); if (activeWarningType === 'fullscreen-exit') document.documentElement.requestFullscreen().catch(e => console.log(e)); }}
+                className="btn-primary"
+                style={{ width: '100%', padding: '1.2rem', fontSize: '1.1rem', background: activeWarningType === 'tab-switch' ? 'var(--danger)' : 'var(--warning)' }}
+              >
+                Resume Secure Session
+              </button>
             </div>
           </div>
+        )}
 
-          {/* Current Question Block */}
-          <div className="glass-panel" key={currentQuestion} style={{ padding: '3rem', minHeight: '400px', animation: 'qFadeIn 0.5s ease-out' }}>
-            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', marginBottom: '2.5rem' }}>
-              <span style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '1.1rem', flexShrink: 0 }}>
-                {currentQuestion + 1}
-              </span>
-              <h3 style={{ margin: 0, fontSize: '1.35rem', lineHeight: '1.5', color: 'var(--text-primary)', fontWeight: '600' }}>
-                {exam.questions[currentQuestion].questionText}
-              </h3>
+        {/* ── Sticky Header ── */}
+        <header className="glass-panel" style={{ position: 'sticky', top: 0, zIndex: 100, borderRadius: 0, borderTop: 'none', borderLeft: 'none', borderRight: 'none', padding: '0 2rem', height: '70px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.3s ease' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+            <div className={`violation-counter ${timeLeft < 300 ? 'active-pulse' : ''}`} style={{ background: timeLeft < 300 ? 'rgba(239, 68, 68, 0.1)' : 'var(--primary-light)', color: timeLeft < 300 ? 'var(--danger)' : 'var(--primary)', borderColor: timeLeft < 300 ? 'var(--danger)' : 'var(--primary)', transition: 'none' }}>
+              <Clock size={18} style={{ animation: 'timerTick 1s infinite' }} />
+              <span style={{ fontSize: '1.25rem', letterSpacing: '0.05em' }}>{formatTime(timeLeft)}</span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: '4rem' }}>
-              {exam.questions[currentQuestion].options.map((opt, optIndex) => {
-                const isSelected = answers.find(a => a.questionId === exam.questions[currentQuestion]._id)?.selectedOptionIndex === optIndex;
+          </div>
+
+          <div style={{ textAlign: 'center' }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>{exam.title}</h2>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '500' }}>Candidate: {user?.name}</span>
+          </div>
+
+          <button className="btn-primary" onClick={handleFinalSubmit} disabled={submitting} style={{ padding: '0.75rem 1.5rem', fontSize: '0.9rem' }}>
+            <Send size={16} /> Final Submission
+          </button>
+        </header>
+
+        {/* ── Main Layout ── */}
+        <main style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 340px', padding: '2rem', gap: '2rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
+
+          {/* Left: Questions Section */}
+          <section style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+
+            {/* Question Navigator */}
+            <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-muted)', marginRight: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Questions</span>
+              {exam.questions.map((q, idx) => {
+                const ansState = answers.find(a => a.questionId === q._id);
+                const isAnswered = ansState && (ansState.selectedOptionIndex !== null || (ansState.fillText && ansState.fillText.trim().length > 0));
+                const isCurrent = idx === currentQuestion;
                 return (
-                  <label key={optIndex} style={{
-                    display: 'flex', alignItems: 'center', gap: '1rem',
-                    padding: '1.1rem 1.5rem', borderRadius: '12px',
-                    border: '2px solid',
-                    borderColor: isSelected ? 'var(--primary)' : 'var(--surface-border)',
-                    background: isSelected ? 'var(--primary-light)' : (isDarkMode ? 'rgba(255,255,255,0.02)' : '#fbfcfd'),
-                    cursor: 'pointer', transition: 'all 0.2s ease',
-                    color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    fontWeight: isSelected ? '600' : '400'
-                  }}
-                    onMouseOver={e => !isSelected && (e.currentTarget.style.borderColor = 'rgba(13,148,136,0.3)')}
-                    onMouseOut={e => !isSelected && (e.currentTarget.style.borderColor = 'rgba(0,0,0,0.05)')}
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentQuestion(idx)}
+                    style={{
+                      width: '38px', height: '38px', borderRadius: '10px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      background: isCurrent ? 'var(--primary)' : isAnswered ? 'var(--primary-light)' : (isDarkMode ? 'rgba(255,255,255,0.03)' : '#f8fafc'),
+                      color: isCurrent ? '#fff' : isAnswered ? 'var(--primary)' : 'var(--text-muted)',
+                      border: '1.5px solid',
+                      borderColor: isCurrent ? 'var(--primary)' : isAnswered ? 'var(--primary)' : 'var(--surface-border)',
+                      boxShadow: isCurrent ? '0 4px 12px rgba(13,148,136,0.3)' : 'none'
+                    }}
+                    onMouseOver={e => !isCurrent && (e.currentTarget.style.borderColor = 'var(--primary)')}
+                    onMouseOut={e => !isCurrent && (e.currentTarget.style.borderColor = isAnswered ? 'var(--primary)' : 'rgba(0,0,0,0.06)')}
                   >
-                    <input
-                      type="radio"
-                      name={`q-${exam.questions[currentQuestion]._id}`}
-                      checked={isSelected}
-                      onChange={() => handleOptionSelect(exam.questions[currentQuestion]._id, optIndex)}
-                      style={{ width: '18px', height: '18px', accentColor: 'var(--primary)', cursor: 'pointer' }}
-                    />
-                    <span style={{ fontSize: '1.05rem' }}>{opt}</span>
-                    {isSelected && <CheckCircle size={18} color="var(--primary)" style={{ marginLeft: 'auto' }} />}
-                  </label>
+                    {idx + 1}
+                  </button>
                 );
               })}
+              <div style={{ marginLeft: 'auto', background: '#f1f5f9', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>
+                Progress: {answeredCount} / {exam.questions.length}
+              </div>
             </div>
-          </div>
 
-          {/* Nav Controls */}
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <button
-              className="btn-secondary"
-              disabled={currentQuestion === 0}
-              onClick={() => setCurrentQuestion(prev => prev - 1)}
-              style={{ opacity: currentQuestion === 0 ? 0.4 : 1 }}
-            >
-              Previous Question
-            </button>
-            <button
-              className="btn-primary"
-              onClick={() => currentQuestion < exam.questions.length - 1 ? setCurrentQuestion(prev => prev + 1) : handleFinalSubmit()}
-              style={{ minWidth: '180px' }}
-            >
-              {currentQuestion === exam.questions.length - 1 ? 'Finish Exam' : 'Next Question'}
-            </button>
-          </div>
-        </section>
-
-        {/* Right: Monitoring Sidebar */}
-        <aside style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-
-          {/* Camera Feed - Hidden visually but functional in background */}
-          <div style={{ display: 'none' }}>
-            <video ref={videoRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
-          </div>
-
-          {/* Integrity Metrics */}
-          <div className="glass-panel" style={{ padding: '1.5rem' }}>
-            <h4 style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <AlertTriangle size={14} /> Integrity Status
-            </h4>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem', marginBottom: '1.5rem' }}>
-              <span style={{ fontSize: '3rem', fontWeight: '800', lineHeight: 1, color: warnings === 0 ? 'var(--success)' : warnings >= 4 ? 'var(--danger)' : 'var(--warning)', animation: warnings > 0 ? 'violationPop 0.5s' : 'none' }}>
-                {warnings}
-              </span>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', paddingBottom: '0.5rem', fontWeight: '600' }}>
-                TOTAL VIOLATIONS
-              </span>
-            </div>
-            <div style={{ height: '8px', background: '#f1f5f9', borderRadius: '10px', marginBottom: '1rem', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%', background: warnings >= 4 ? 'var(--danger)' : warnings >= 2 ? 'var(--warning)' : 'var(--success)',
-                width: `${(warnings / MAX_VIOLATIONS) * 100}%`, transition: 'width 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-              }} />
-            </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Info size={14} /> {MAX_VIOLATIONS - warnings} violation(s) remaining
-            </p>
-          </div>
-
-          {/* Activity Timeline */}
-          <div className="glass-panel" style={{ padding: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <h4 style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1.25rem' }}>Session Timeline</h4>
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.8rem', paddingRight: '0.5rem' }}>
-              {activityLog.map((log, i) => (
-                <div key={i} style={{ display: 'flex', gap: '0.8rem', animation: 'fadeIn 0.4s ease-out' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: log.type === 'start' ? 'var(--primary)' : 'var(--danger)', marginTop: '5px' }} />
-                    {i < activityLog.length - 1 && <div style={{ width: '1.5px', flex: 1, background: 'rgba(0,0,0,0.06)', margin: '4px 0' }} />}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '700' }}>{log.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '500' }}>{log.label}</div>
-                  </div>
+            {/* Current Question Block */}
+            <div className="glass-panel" key={currentQuestion} style={{ padding: '3rem', minHeight: '400px', animation: 'qFadeIn 0.5s ease-out' }}>
+              <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', marginBottom: '2.5rem' }}>
+                <span style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '1.1rem', flexShrink: 0 }}>
+                  {currentQuestion + 1}
+                </span>
+                <div style={{ flex: 1 }}>
+                  {exam.questions[currentQuestion].questionText && (
+                    <h3 style={{ margin: 0, fontSize: '1.35rem', lineHeight: '1.5', color: 'var(--text-primary)', fontWeight: '600' }}>
+                      {exam.questions[currentQuestion].questionText}
+                    </h3>
+                  )}
+                  {exam.questions[currentQuestion].questionImage && (
+                    <img src={exam.questions[currentQuestion].questionImage} alt="Problem statement" style={{ marginTop: '1rem', maxWidth: '100%', borderRadius: '12px', border: '1.5px solid var(--surface-border)' }} />
+                  )}
                 </div>
-              ))}
-              <div ref={timelineEndRef} />
-            </div>
-          </div>
-        </aside>
-      </main>
+              </div>
 
-      {/* ── Toast Notification System ── */}
-      {(toastNotification || lockdownToast) && (
-        <div style={{
-          position: 'fixed', top: '100px', right: '30px',
-          background: (toastNotification?.type === 'error' || lockdownToast) ? 'var(--danger)' : 'var(--success)',
-          color: '#fff', padding: '1rem 1.8rem', borderRadius: '12px',
-          fontSize: '0.95rem', fontWeight: '700', zIndex: 3000,
-          boxShadow: '0 12px 32px rgba(0,0,0,0.15)',
-          animation: 'toastSlideIn 0.45s cubic-bezier(0.18, 0.89, 0.32, 1.28)',
-          display: 'flex', alignItems: 'center', gap: '0.75rem'
-        }}>
-          <AlertTriangle size={20} />
-          {toastNotification?.message || lockdownToast}
-        </div>
-      )}
+              <div style={{ paddingLeft: '4rem' }}>
+                {exam.questions[currentQuestion].type === 'fill-in-blank' ? (
+                  <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                    <input
+                      type="text"
+                      className="input-field-enhanced"
+                      placeholder="Type your exact answer here..."
+                      value={answers.find(a => a.questionId === exam.questions[currentQuestion]._id)?.fillText || ''}
+                      onChange={(e) => handleTextFill(exam.questions[currentQuestion]._id, e.target.value)}
+                      style={{ width: '100%', padding: '1.25rem', borderRadius: '12px', border: '2px solid var(--surface-border)', background: isDarkMode ? 'rgba(255,255,255,0.02)' : 'white', color: 'var(--text-primary)', fontSize: '1.1rem', fontWeight: '500', transition: 'all 0.2s' }}
+                      onFocus={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.boxShadow = '0 0 0 4px var(--primary-light)'; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = 'var(--surface-border)'; e.currentTarget.style.boxShadow = 'none'; }}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {exam.questions[currentQuestion].options.map((opt, optIndex) => {
+                      const isSelected = answers.find(a => a.questionId === exam.questions[currentQuestion]._id)?.selectedOptionIndex === optIndex;
+                      const optImg = exam.questions[currentQuestion].optionImages?.[optIndex];
+                      return (
+                        <label key={optIndex} style={{
+                          display: 'flex', alignItems: 'center', gap: '1.1rem',
+                          padding: '1.1rem 1.5rem', borderRadius: '12px',
+                          border: '2px solid',
+                          borderColor: isSelected ? 'var(--primary)' : 'var(--surface-border)',
+                          background: isSelected ? 'var(--primary-light)' : (isDarkMode ? 'rgba(255,255,255,0.02)' : '#fbfcfd'),
+                          cursor: 'pointer', transition: 'all 0.2s ease',
+                          color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                          fontWeight: isSelected ? '600' : '400'
+                        }}
+                          onMouseOver={e => !isSelected && (e.currentTarget.style.borderColor = 'rgba(13,148,136,0.3)')}
+                          onMouseOut={e => !isSelected && (e.currentTarget.style.borderColor = 'rgba(0,0,0,0.05)')}
+                        >
+                          <input
+                            type="radio"
+                            name={`q-${exam.questions[currentQuestion]._id}`}
+                            checked={isSelected}
+                            onChange={() => handleOptionSelect(exam.questions[currentQuestion]._id, optIndex)}
+                            style={{ width: '20px', height: '20px', accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }}
+                          />
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                            {opt && <span style={{ fontSize: '1.05rem' }}>{opt}</span>}
+                            {optImg && <img src={optImg} alt={`Option ${optIndex + 1}`} style={{ maxWidth: '250px', maxHeight: '120px', borderRadius: '8px', border: '1px solid var(--surface-border)' }} />}
+                          </div>
+                          {isSelected && <CheckCircle size={20} color="var(--primary)" style={{ marginLeft: 'auto', flexShrink: 0 }} />}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Nav Controls */}
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <button
+                className="btn-secondary"
+                disabled={currentQuestion === 0}
+                onClick={() => setCurrentQuestion(prev => prev - 1)}
+                style={{ opacity: currentQuestion === 0 ? 0.4 : 1 }}
+              >
+                Previous Question
+              </button>
+              <button
+                className="btn-primary"
+                onClick={() => currentQuestion < exam.questions.length - 1 ? setCurrentQuestion(prev => prev + 1) : handleFinalSubmit()}
+                style={{ minWidth: '180px' }}
+              >
+                {currentQuestion === exam.questions.length - 1 ? 'Finish Exam' : 'Next Question'}
+              </button>
+            </div>
+          </section>
+
+          {/* Right: Monitoring Sidebar */}
+          <aside style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+
+            {/* Camera Feed - Hidden visually but functional in background */}
+            <div style={{ display: 'none' }}>
+              <video ref={videoRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
+            </div>
+
+            {/* Integrity Metrics */}
+            <div className="glass-panel" style={{ padding: '1.5rem' }}>
+              <h4 style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <AlertTriangle size={14} /> Integrity Status
+              </h4>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem', marginBottom: '1.5rem' }}>
+                <span style={{ fontSize: '3rem', fontWeight: '800', lineHeight: 1, color: warnings === 0 ? 'var(--success)' : warnings >= 4 ? 'var(--danger)' : 'var(--warning)', animation: warnings > 0 ? 'violationPop 0.5s' : 'none' }}>
+                  {warnings}
+                </span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', paddingBottom: '0.5rem', fontWeight: '600' }}>
+                  TOTAL VIOLATIONS
+                </span>
+              </div>
+              <div style={{ height: '8px', background: '#f1f5f9', borderRadius: '10px', marginBottom: '1rem', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', background: warnings >= 4 ? 'var(--danger)' : warnings >= 2 ? 'var(--warning)' : 'var(--success)',
+                  width: `${(warnings / MAX_VIOLATIONS) * 100}%`, transition: 'width 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                }} />
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Info size={14} /> {MAX_VIOLATIONS - warnings} violation(s) remaining
+              </p>
+            </div>
+
+            {/* Activity Timeline */}
+            <div className="glass-panel" style={{ padding: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <h4 style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1.25rem' }}>Session Timeline</h4>
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.8rem', paddingRight: '0.5rem' }}>
+                {activityLog.map((log, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '0.8rem', animation: 'fadeIn 0.4s ease-out' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: log.type === 'start' ? 'var(--primary)' : 'var(--danger)', marginTop: '5px' }} />
+                      {i < activityLog.length - 1 && <div style={{ width: '1.5px', flex: 1, background: 'rgba(0,0,0,0.06)', margin: '4px 0' }} />}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '700' }}>{log.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '500' }}>{log.label}</div>
+                    </div>
+                  </div>
+                ))}
+                <div ref={timelineEndRef} />
+              </div>
+            </div>
+          </aside>
+        </main>
+
+        {/* ── Toast Notification System ── */}
+        {(toastNotification || lockdownToast) && (
+          <div style={{
+            position: 'fixed', top: '100px', right: '30px',
+            background: (toastNotification?.type === 'error' || lockdownToast) ? 'var(--danger)' : 'var(--success)',
+            color: '#fff', padding: '1rem 1.8rem', borderRadius: '12px',
+            fontSize: '0.95rem', fontWeight: '700', zIndex: 3000,
+            boxShadow: '0 12px 32px rgba(0,0,0,0.15)',
+            animation: 'toastSlideIn 0.45s cubic-bezier(0.18, 0.89, 0.32, 1.28)',
+            display: 'flex', alignItems: 'center', gap: '0.75rem'
+          }}>
+            <AlertTriangle size={20} />
+            {toastNotification?.message || lockdownToast}
+          </div>
+        )}
       </div>
     </div>
   );

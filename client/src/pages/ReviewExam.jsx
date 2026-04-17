@@ -83,7 +83,12 @@ const ReviewExam = () => {
     const answer = attempt.answers.find(a => a.questionId === questionId);
     if (!question) return null;
 
-    const isCorrect = answer && answer.selectedOptionIndex === question.correctOptionIndex;
+    let isCorrect = false;
+    if (question.type === 'fill-in-blank') {
+       isCorrect = (answer?.fillText || '').trim().toLowerCase() === (question.correctAnswerText || '').trim().toLowerCase() && (question.correctAnswerText || '').trim() !== '';
+    } else {
+       isCorrect = answer && answer.selectedOptionIndex === question.correctOptionIndex && typeof answer.selectedOptionIndex === 'number';
+    }
     if (isCorrect) correctCount++;
     else wrongCount++;
 
@@ -317,49 +322,81 @@ const ReviewExam = () => {
                 }}>
                   {idx + 1}
                 </span>
-                <h3 style={{ fontSize: '1.3rem', lineHeight: '1.5', margin: 0, paddingTop: '4px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                  {question.questionText}
-                </h3>
+                <div style={{ flex: 1 }}>
+                   {question.questionText && (
+                     <h3 style={{ fontSize: '1.3rem', lineHeight: '1.5', margin: 0, paddingTop: '4px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                       {question.questionText}
+                     </h3>
+                   )}
+                   {question.questionImage && (
+                     <img src={question.questionImage} alt="Problem statement" style={{ marginTop: '1rem', maxWidth: '100%', borderRadius: '12px', border: '1.5px solid var(--surface-border)' }} />
+                   )}
+                </div>
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingLeft: '4.5rem' }}>
-                {question.options.map((opt, optIndex) => {
-                  const isSelected = answer && answer.selectedOptionIndex === optIndex;
-                  const isActuallyCorrect = question.correctOptionIndex === optIndex;
-                  
-                  let bgColor = isDarkMode ? 'rgba(255,255,255,0.02)' : '#fbfcfd';
-                  let borderColor = 'var(--surface-border)';
-                  let icon = null;
-                  
-                  if (isActuallyCorrect) {
-                    bgColor = isDarkMode ? 'rgba(22, 163, 74, 0.1)' : '#f0fdf4';
-                    borderColor = isDarkMode ? 'rgba(22, 163, 74, 0.4)' : '#bbf7d0';
-                    icon = <CheckCircle size={20} color={isDarkMode ? '#4ade80' : '#16a34a'} />;
-                  } else if (isSelected && !isActuallyCorrect) {
-                    bgColor = isDarkMode ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2';
-                    borderColor = isDarkMode ? 'rgba(239, 68, 68, 0.4)' : '#fecaca';
-                    icon = <XCircle size={20} color={isDarkMode ? '#f87171' : '#dc2626'} />;
-                  }
-                  
-                  return (
-                    <div 
-                      key={optIndex} 
-                      style={{ 
-                        padding: '1.1rem 1.5rem', 
-                        borderRadius: '14px', 
-                        border: `1.5px solid ${borderColor}`,
-                        background: bgColor,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      <span style={{ fontSize: '1.05rem', fontWeight: (isSelected || isActuallyCorrect) ? '600' : '400', color: 'var(--text-primary)' }}>{opt}</span>
-                      {icon}
-                    </div>
-                  );
-                })}
+                {question.type === 'fill-in-blank' ? (
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      <div style={{ padding: '1.1rem 1.5rem', borderRadius: '14px', border: `1.5px solid ${isCorrect ? (isDarkMode ? 'rgba(22, 163, 74, 0.4)' : '#bbf7d0') : (isDarkMode ? 'rgba(239, 68, 68, 0.4)' : '#fecaca')}`, background: isCorrect ? (isDarkMode ? 'rgba(22, 163, 74, 0.1)' : '#f0fdf4') : (isDarkMode ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2'), display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                         <div>
+                            <div style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '0.3rem' }}>Your Answer</div>
+                            <span style={{ fontSize: '1.05rem', fontWeight: '600', color: 'var(--text-primary)' }}>{answer?.fillText || '(None)'}</span>
+                         </div>
+                         {isCorrect ? <CheckCircle size={24} color={isDarkMode ? '#4ade80' : '#16a34a'} /> : <XCircle size={24} color={isDarkMode ? '#f87171' : '#dc2626'} />}
+                      </div>
+                      {!isCorrect && (
+                         <div style={{ padding: '1.1rem 1.5rem', borderRadius: '14px', border: `1.5px solid ${isDarkMode ? 'rgba(22, 163, 74, 0.4)' : '#bbf7d0'}`, background: isDarkMode ? 'rgba(22, 163, 74, 0.1)' : '#f0fdf4', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                               <div style={{ fontSize: '0.8rem', fontWeight: '700', color: '#16a34a', textTransform: 'uppercase', marginBottom: '0.3rem' }}>Correct Answer</div>
+                               <span style={{ fontSize: '1.05rem', fontWeight: '600', color: 'var(--text-primary)' }}>{question.correctAnswerText || ''}</span>
+                            </div>
+                            <CheckCircle size={24} color={isDarkMode ? '#4ade80' : '#16a34a'} />
+                         </div>
+                      )}
+                   </div>
+                ) : (
+                  question.options.map((opt, optIndex) => {
+                    const isSelected = answer && answer.selectedOptionIndex === optIndex;
+                    const isActuallyCorrect = question.correctOptionIndex === optIndex;
+                    const optImg = question.optionImages?.[optIndex];
+                    
+                    let bgColor = isDarkMode ? 'rgba(255,255,255,0.02)' : '#fbfcfd';
+                    let borderColor = 'var(--surface-border)';
+                    let icon = null;
+                    
+                    if (isActuallyCorrect) {
+                      bgColor = isDarkMode ? 'rgba(22, 163, 74, 0.1)' : '#f0fdf4';
+                      borderColor = isDarkMode ? 'rgba(22, 163, 74, 0.4)' : '#bbf7d0';
+                      icon = <CheckCircle size={20} color={isDarkMode ? '#4ade80' : '#16a34a'} />;
+                    } else if (isSelected && !isActuallyCorrect) {
+                      bgColor = isDarkMode ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2';
+                      borderColor = isDarkMode ? 'rgba(239, 68, 68, 0.4)' : '#fecaca';
+                      icon = <XCircle size={20} color={isDarkMode ? '#f87171' : '#dc2626'} />;
+                    }
+                    
+                    return (
+                      <div 
+                        key={optIndex} 
+                        style={{ 
+                          padding: '1.1rem 1.5rem', 
+                          borderRadius: '14px', 
+                          border: `1.5px solid ${borderColor}`,
+                          background: bgColor,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                          {opt && <span style={{ fontSize: '1.05rem', fontWeight: (isSelected || isActuallyCorrect) ? '600' : '400', color: 'var(--text-primary)' }}>{opt}</span>}
+                          {optImg && <img src={optImg} alt={`Option ${optIndex + 1}`} style={{ maxWidth: '250px', maxHeight: '120px', borderRadius: '8px', border: '1px solid var(--surface-border)' }} />}
+                        </div>
+                        {icon}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           );

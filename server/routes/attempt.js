@@ -12,11 +12,29 @@ const router = express.Router();
 router.post('/start', protect, async (req, res) => {
   try {
     const { examId } = req.body;
-    
-    // Check if an attempt already exists and is in-progress
+
     const existingAttempt = await Attempt.findOne({ student: req.user._id, exam: examId, status: 'in-progress' });
     if (existingAttempt) {
-      return res.status(400).json({ message: 'Attempt already in progress' });
+      // Idempotent: return the existing attempt instead of creating duplicate or throwing 400
+      existingAttempt.updatedAt = Date.now();
+      await existingAttempt.save();
+      return res.status(200).json(existingAttempt);
+    }
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({ message: 'Exam not found' });
+    }
+    if (exam.isDeleted) {
+      return res.status(400).json({ message: 'Exam is deleted' });
+    }
+    // Compute exam end: explicit endTime OR startTime + duration
+    const examEndTime = exam.endTime
+      ? new Date(exam.endTime)
+      : (exam.startTime ? new Date(new Date(exam.startTime).getTime() + exam.durationMinutes * 60000) : null);
+
+    if (examEndTime && new Date() > examEndTime) {
+      return res.status(400).json({ message: 'This exam has expired' });
     }
 
     const attempt = new Attempt({
@@ -38,7 +56,7 @@ router.post('/:id/submit', protect, async (req, res) => {
   try {
     const { answers } = req.body;
     const attempt = await Attempt.findById(req.params.id);
-    
+
     if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
     if (attempt.student.toString() !== req.user._id.toString()) {
       return res.status(401).json({ message: 'Not authorized' });
@@ -48,17 +66,36 @@ router.post('/:id/submit', protect, async (req, res) => {
     }
 
     const exam = await Exam.findById(attempt.exam);
+    if (!exam) return res.status(404).json({ message: 'Exam not found' });
+    if (exam.isDeleted) {
+      return res.status(400).json({ message: 'Exam is deleted' });
+    }
+    if (exam.endTime && new Date() > new Date(exam.endTime)) {
+      return res.status(400).json({ message: 'This exam has ended' });
+    }
+
     let score = 0;
 
     // Calculate score
     const processedAnswers = answers.map(ans => {
       const question = exam.questions.id(ans.questionId);
-      if (question && question.correctOptionIndex === ans.selectedOptionIndex) {
-        score++;
+      if (question) {
+        if (question.type === 'fill-in-blank') {
+          const submittedText = (ans.fillText || '').trim().toLowerCase();
+          const correctText = (question.correctAnswerText || '').trim().toLowerCase();
+          if (submittedText === correctText && correctText !== '') {
+            score++;
+          }
+        } else {
+          if (question.correctOptionIndex === ans.selectedOptionIndex && typeof ans.selectedOptionIndex === 'number') {
+            score++;
+          }
+        }
       }
       return {
         questionId: ans.questionId,
-        selectedOptionIndex: ans.selectedOptionIndex
+        selectedOptionIndex: ans.selectedOptionIndex,
+        fillText: ans.fillText
       };
     });
 
@@ -66,7 +103,7 @@ router.post('/:id/submit', protect, async (req, res) => {
     const allViolations = await ViolationLog.find({ attempt: attempt._id });
     const tabSwitches = allViolations.filter(v => v.type === 'TAB_SWITCH' || v.type === 'tab-switch' || v.type === 'window-blur').length;
     const fsExits = allViolations.filter(v => v.type === 'FULLSCREEN_EXIT' || v.type === 'fullscreen-exit').length;
-    
+
     const violationCount = allViolations.length;
     const suspicionScore = (tabSwitches * 10) + (fsExits * 15);
     const isDisqualified = violationCount >= 5 || req.body.isDisqualified === true;
@@ -95,16 +132,16 @@ router.post('/:id/violation', protect, async (req, res) => {
       return res.status(200).json({ message: 'Admins are excluded from violation tracking' });
     }
     let { type } = req.body;
-    
+
     // Map legacy frontend types to new explicit backend types
     if (type === 'tab-switch') type = 'TAB_SWITCH';
     if (type === 'window-blur') type = 'TAB_SWITCH';
     if (type === 'fullscreen-exit') type = 'FULLSCREEN_EXIT';
 
     const attempt = await Attempt.findById(req.params.id);
-    
+
     if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
-    
+
     const violation = new ViolationLog({
       attempt: attempt._id,
       student: req.user._id,
@@ -128,15 +165,26 @@ router.get('/live', protect, async (req, res) => {
 
     const activeAttempts = await Attempt.find({ status: 'in-progress' })
       .populate('student', 'name email role')
-      .populate('exam', 'title')
+      .populate({ path: 'exam', select: 'title isDeleted', match: { isDeleted: { $ne: true } } })
       .sort('-startedAt');
 
-    // Filter to only include student attempts (safety check)
-    const studentAttempts = activeAttempts.filter(a => a.student && a.student.role === 'student');
+    // Filter to only include student attempts (safety check) and non-deleted exams
+    const studentAttempts = activeAttempts.filter(a => a.student && a.student.role === 'student' && a.exam != null);
+
+    // Deduplicate older phantom duplicates from db before sending to frontend
+    const uniqueStudentAttempts = [];
+    const seenSet = new Set();
+    studentAttempts.forEach(a => {
+      const key = String(a.student._id) + '_' + String(a.exam._id);
+      if (!seenSet.has(key)) {
+        seenSet.add(key);
+        uniqueStudentAttempts.push(a);
+      }
+    });
 
     // Attach violation counts for each attempt
     const liveData = await Promise.all(
-      studentAttempts.map(async (attempt) => {
+      uniqueStudentAttempts.map(async (attempt) => {
         const allViolations = await ViolationLog.find({ attempt: attempt._id }).sort('-timestamp');
         const tabSwitches = allViolations.filter(v => v.type === 'TAB_SWITCH' || v.type === 'tab-switch').length;
         const fullscreenExits = allViolations.filter(v => v.type === 'FULLSCREEN_EXIT' || v.type === 'fullscreen-exit').length;
@@ -167,12 +215,14 @@ router.get('/live', protect, async (req, res) => {
 router.get('/violations/all', protect, async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
-    
+
     const logs = await ViolationLog.find()
       .populate('student', 'name email role')
-      .populate('exam', 'title')
+      .populate({ path: 'exam', select: 'title isDeleted', match: { isDeleted: { $ne: true } } })
       .sort('-timestamp');
-    res.json(logs);
+
+    const validLogs = logs.filter(log => log.exam != null);
+    res.json(validLogs);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -186,9 +236,28 @@ router.get('/all', protect, async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
     const attempts = await Attempt.find()
       .populate('student', 'name email role')
-      .populate('exam', 'title')
+      .populate({ path: 'exam', select: 'title isDeleted', match: { isDeleted: { $ne: true } } })
       .sort('-createdAt');
-    res.json(attempts);
+
+    const validAttempts = attempts.filter(a => a.exam != null);
+
+    // Deduplicate in-progress attempts to remove legacy phantom duplicates
+    const deduplicatedAttempts = [];
+    const inProgressSet = new Set();
+
+    validAttempts.forEach(a => {
+      if (a.status === 'in-progress' && a.student && a.exam) {
+        const key = String(a.student._id) + '_' + String(a.exam._id);
+        if (!inProgressSet.has(key)) {
+          inProgressSet.add(key);
+          deduplicatedAttempts.push(a);
+        }
+      } else {
+        deduplicatedAttempts.push(a);
+      }
+    });
+
+    res.json(deduplicatedAttempts);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -199,8 +268,12 @@ router.get('/all', protect, async (req, res) => {
 // @access  Private
 router.get('/my-attempts', protect, async (req, res) => {
   try {
-    const attempts = await Attempt.find({ student: req.user._id }).populate('exam', 'title description durationMinutes').sort('-createdAt');
-    res.json(attempts);
+    const attempts = await Attempt.find({ student: req.user._id })
+      .populate({ path: 'exam', select: 'title description durationMinutes isDeleted', match: { isDeleted: { $ne: true } } })
+      .sort('-createdAt');
+
+    const validAttempts = attempts.filter(a => a.exam != null);
+    res.json(validAttempts);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -213,7 +286,7 @@ router.get('/:id/review', protect, async (req, res) => {
   try {
     const attempt = await Attempt.findById(req.params.id)
       .populate('exam', 'title description durationMinutes questions');
-    
+
     if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
     if (attempt.student.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Not authorized' });
@@ -257,12 +330,14 @@ router.get('/:id/violations', protect, async (req, res) => {
 router.get('/violations/by-exam/:examId', protect, async (req, res) => {
   try {
     if (req.user.role !== 'admin') return res.status(403).json({ message: 'Not authorized' });
-    
+
     const logs = await ViolationLog.find({ exam: req.params.examId })
       .populate('student', 'name email role')
-      .populate('exam', 'title')
+      .populate({ path: 'exam', select: 'title isDeleted', match: { isDeleted: { $ne: true } } })
       .sort('-timestamp');
-    res.json(logs);
+
+    const validLogs = logs.filter(log => log.exam != null);
+    res.json(validLogs);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

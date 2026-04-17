@@ -19,10 +19,10 @@ router.get('/:studentId/:examId', protect, async (req, res) => {
     // Fetch the specific attempt
     const attempt = await Attempt.findOne({ student: studentId, exam: examId })
       .populate('student', 'name email role')
-      .populate('exam', 'title description durationMinutes questions');
+      .populate({ path: 'exam', select: 'title description durationMinutes questions isDeleted', match: { isDeleted: { $ne: true } } });
 
-    if (!attempt) {
-      return res.status(404).json({ message: 'Attempt not found for this student and exam' });
+    if (!attempt || !attempt.exam) {
+      return res.status(404).json({ message: 'Attempt not found or exam is deleted' });
     }
 
     // Fetch all violations for this attempt

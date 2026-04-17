@@ -8,9 +8,12 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const isAdminPage = window.location.pathname.startsWith('/admin');
-  const token = isAdminPage 
-    ? localStorage.getItem('adminToken') 
-    : localStorage.getItem('studentToken');
+  const isSuperAdminPage = window.location.pathname.startsWith('/superadmin');
+
+  let token;
+  if (isAdminPage) token = localStorage.getItem('adminToken');
+  else if (isSuperAdminPage) token = localStorage.getItem('superAdminToken');
+  else token = localStorage.getItem('studentToken');
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

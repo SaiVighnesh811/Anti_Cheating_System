@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import jsPDF from 'jspdf';
 import JSZip from 'jszip';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { PlusCircle, FileText, AlertTriangle, LogOut, Filter, RefreshCw } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import { PlusCircle, FileText, AlertTriangle, LogOut, Filter, RefreshCw, Download, Trash2, Edit3, ChevronDown, ChevronRight, Clock, CheckCircle } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Bar, Pie } from 'react-chartjs-2';
+import * as XLSX from 'xlsx';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
@@ -27,7 +29,7 @@ const getEventMeta = (type) => {
   return { label: `Event: ${type}`, icon: '🔵', color: '#6366f1', dotColor: '#6366f1', bg: 'rgba(99, 102, 241, 0.1)' };
 };
 
-const ActivityTimeline = ({ history }) => {
+const ActivityTimeline = ({ history, isDarkMode }) => {
   const endRef = useRef(null);
 
   useEffect(() => {
@@ -111,6 +113,8 @@ const ActivityTimeline = ({ history }) => {
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
+  const { showToast } = useToast();
+  const navigate = useNavigate();
   const [exams, setExams] = useState([]);
   const [rawViolations, setRawViolations] = useState([]);
   const [attempts, setAttempts] = useState([]);
@@ -118,12 +122,28 @@ const AdminDashboard = () => {
   const [selectedStudentGroup, setSelectedStudentGroup] = useState(null);
   const [selectedExamId, setSelectedExamId] = useState('all');
   const [selectedRiskLevel, setSelectedRiskLevel] = useState('all');
+  const [resultsExamFilter, setResultsExamFilter] = useState('all');
+  const [resultsSortConfig, setResultsSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
   const [reportLoading, setReportLoading] = useState(false);
+  const [expandedSections, setExpandedSections] = useState({ active: true, past: true, deleted: false });
   
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const categorizedExams = useMemo(() => {
+    const now = new Date();
+    return {
+      active: exams.filter(e => !e.isDeleted && (!e.endTime || new Date(e.endTime) > now)),
+      past: exams.filter(e => !e.isDeleted && e.endTime && new Date(e.endTime) < now),
+      deleted: exams.filter(e => e.isDeleted)
+    };
+  }, [exams]);
+
   // Theme state
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    const savedRole = localStorage.getItem('theme');
-    return savedRole === 'dark';
+    const savedTheme = localStorage.getItem('theme');
+    return savedTheme === 'dark';
   });
 
   const toggleTheme = () => {
@@ -134,7 +154,48 @@ const AdminDashboard = () => {
     });
   };
 
-  // ── REPORT GENERATION LOGIC ──────────────────────────────────────────────
+  const renderExamCard = (exam, isDeletedView = false) => (
+    <div key={exam._id} style={{ 
+      background: 'rgba(255,255,255,0.03)', 
+      padding: '1rem', 
+      borderRadius: '8px', 
+      border: '1px solid var(--surface-border)',
+      opacity: isDeletedView ? 0.6 : 1
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <FileText size={18} color="var(--primary)" />
+          <h3 style={{ fontSize: '1.1rem', fontWeight: '600', color: 'var(--text-primary)', margin: 0 }}>{exam.title}</h3>
+          {isDeletedView && <span style={{ color: '#ef4444', fontSize: '0.7rem', fontWeight: 'bold', border: '1px solid #ef4444', padding: '1px 4px', borderRadius: '4px' }}>DELETED</span>}
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {!isDeletedView && (
+            <>
+              <button 
+                onClick={() => navigate(`/admin/edit-exam/${exam._id}`)}
+                style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: '0.25rem' }}
+                title="Edit Exam"
+              >
+                <Edit3 size={16} />
+              </button>
+              <button 
+                onClick={() => handleDeleteExam(exam._id)}
+                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0.25rem' }}
+                title="Delete Exam"
+              >
+                <Trash2 size={16} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', gap: '1rem' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>⏱️ {exam.durationMinutes}m</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>🧩 {exam.questions?.length || 0} Questions</span>
+        {exam.startTime && <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>📅 {new Date(exam.startTime).toLocaleDateString()}</span>}
+      </div>
+    </div>
+  );
   const generateStudentPDF = (reportData) => {
     const { attempt, violations } = reportData;
     const doc = new jsPDF();
@@ -331,6 +392,56 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleDownloadExcel = () => {
+    if (resultsExamFilter === 'all') {
+       alert("Please select a specific exam to download Excel results.");
+       return;
+    }
+
+    const filteredAttempts = attempts.filter(a => a.exam?._id === resultsExamFilter || a.exam === resultsExamFilter);
+    if (filteredAttempts.length === 0) {
+      alert("No results available for the selected exam.");
+      return;
+    }
+
+    const examTitle = filteredAttempts[0].exam?.title || 'Exam_Results';
+    
+    const excelData = filteredAttempts.map(attempt => {
+       const start = new Date(attempt.startedAt).toLocaleString();
+       const end = attempt.completedAt ? new Date(attempt.completedAt).toLocaleString() : 'N/A';
+       
+       return {
+         'Student Name': attempt.student?.name || 'Unknown',
+         'Student ID': attempt.student?._id?.substring(0,8) || 'N/A', // Assuming MongoDB ObjectId, display first 8 chars or full if available
+         'Email': attempt.student?.email || 'N/A',
+         'Exam Name': attempt.exam?.title || 'Unknown',
+         'Score': attempt.is_disqualified ? 'N/A' : attempt.score,
+         'Status': attempt.is_disqualified ? 'DISQUALIFIED' : (attempt.status || 'UNKNOWN').toUpperCase(),
+         'Start Time': start,
+         'End Time': end,
+         'Violations Count': attempt.violation_count || 0
+       };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Results');
+    
+    // Make Columns fit content
+    const wscols = Object.keys(excelData[0]).map(key => ({ wch: Math.max(key.length, 15) }));
+    worksheet['!cols'] = wscols;
+
+    XLSX.writeFile(workbook, `${examTitle.replace(/\s+/g, '_')}_Results.xlsx`);
+  };
+
+  const handleSortResults = (key) => {
+    let direction = 'asc';
+    if (resultsSortConfig.key === key && resultsSortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setResultsSortConfig({ key, direction });
+  };
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       console.log("Fetching dashboard...");
@@ -375,6 +486,18 @@ const AdminDashboard = () => {
     };
   }, []);
 
+  const handleDeleteExam = async (examId) => {
+    if (window.confirm('Are you sure you want to delete this exam? All related results and violations will be permanently removed. 🗑️')) {
+      try {
+        await api.delete(`/exams/${examId}`);
+        setExams(prev => prev.filter(e => e._id !== examId));
+        showToast('Exam and related data deleted successfully ✅', 'success');
+      } catch (err) {
+        showToast('Failed to delete exam', 'error');
+      }
+    }
+  };
+
   // ── Live Proctoring Polling ──────────────────────────────────────────────
   const [liveStudents, setLiveStudents] = useState([]);
   const [liveLastUpdated, setLiveLastUpdated] = useState(null);
@@ -387,8 +510,20 @@ const AdminDashboard = () => {
       try {
         const config = { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } };
         const { data } = await api.get(`/attempts/live?t=${new Date().getTime()}`, config);
-        console.log("Updated live data:", data);
-        setLiveStudents(data);
+        
+        // DEDUPLICATE GLOBALLY FOR FRONTEND TO FIX BAD DB STATES
+        const uniqueData = [];
+        const seenSet = new Set();
+        data.forEach((s) => {
+          const key = String(s.student?._id) + '_' + String(s.exam?._id);
+          if (!seenSet.has(key)) {
+             seenSet.add(key);
+             uniqueData.push(s);
+          }
+        });
+
+        console.log("Updated live data:", uniqueData);
+        setLiveStudents(uniqueData);
         setLiveLastUpdated(new Date());
 
         // VANILLA JS DOM MANIPULATION FIX AS REQUESTED
@@ -826,7 +961,7 @@ const AdminDashboard = () => {
       `}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
         <div>
-          <h1 className="page-title" style={{ margin: 0, color: 'var(--text-primary)' }}>Admin Portal</h1>
+          <h1 className="page-title" style={{ margin: 0, color: 'var(--text-primary)' }}>Teacher Portal</h1>
           <p style={{ color: 'var(--text-secondary)' }}>Welcome back, {user?.name}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -1039,21 +1174,67 @@ const AdminDashboard = () => {
           </div>
 
           {exams.length === 0 ? (
-            <p style={{ color: 'var(--text-secondary)' }}>No active exams currently available.</p>
+            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px dashed var(--surface-border)' }}>
+              <FileText size={40} color="var(--primary)" style={{ opacity: 0.2, marginBottom: '1rem' }} />
+              <p>No exams available. Create your first assessment to begin!</p>
+            </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {exams.map(exam => (
-                <div key={exam._id} style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--surface-border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                    <FileText size={18} color="var(--primary)" />
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: '500' }}>{exam.title}</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              {/* Active / Upcoming Exams */}
+              <div>
+                <button 
+                  onClick={() => toggleSection('active')}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', background: 'var(--primary-light)', border: 'none', borderRadius: '8px', cursor: 'pointer', marginBottom: '1rem' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '700', color: 'var(--primary)' }}>
+                    {expandedSections.active ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                    <Clock size={16} /> Active & Upcoming Assessments ({categorizedExams.active.length})
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', gap: '1rem' }}>
-                    <span>Duration: {exam.durationMinutes}m</span>
-                    <span>Questions: {exam.questions.length}</span>
+                </button>
+                {expandedSections.active && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingLeft: '0.5rem' }}>
+                    {categorizedExams.active.length === 0 ? <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', padding: '1rem' }}>No active assessments found.</p> : categorizedExams.active.map(exam => renderExamCard(exam))}
                   </div>
+                )}
+              </div>
+
+              {/* Past Exams */}
+              <div>
+                <button 
+                  onClick={() => toggleSection('past')}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '8px', cursor: 'pointer', marginBottom: '1rem' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '700', color: 'var(--text-secondary)' }}>
+                    {expandedSections.past ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                    <CheckCircle size={16} /> Past Assessments ({categorizedExams.past.length})
+                  </div>
+                </button>
+                {expandedSections.past && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingLeft: '0.5rem' }}>
+                    {categorizedExams.past.length === 0 ? <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', padding: '1rem' }}>No past assessments found.</p> : categorizedExams.past.map(exam => renderExamCard(exam))}
+                  </div>
+                )}
+              </div>
+
+              {/* Deleted Exams (Optional) */}
+              {categorizedExams.deleted.length > 0 && (
+                <div>
+                  <button 
+                    onClick={() => toggleSection('deleted')}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.05)', border: 'none', borderRadius: '8px', cursor: 'pointer', marginBottom: '1rem' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '700', color: '#ef4444' }}>
+                      {expandedSections.deleted ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                      <Trash2 size={16} /> Deleted Archives ({categorizedExams.deleted.length})
+                    </div>
+                  </button>
+                  {expandedSections.deleted && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', paddingLeft: '0.5rem', opacity: 0.7 }}>
+                      {categorizedExams.deleted.map(exam => renderExamCard(exam, true))}
+                    </div>
+                  )}
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
@@ -1200,90 +1381,152 @@ const AdminDashboard = () => {
       </div>
 
       <div className="glass-panel" style={{ padding: '2rem', marginBottom: '3rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-          <FileText size={24} color="var(--primary)" />
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '600' }}>Student Results</h2>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-          <button
-            className="btn-primary"
-            onClick={handleDownloadAllReports}
-            disabled={reportLoading || attempts.length === 0}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: attempts.length === 0 ? 0.5 : 1 }}
-          >
-            Download All Reports 📦
-          </button>
-        </div>
-
-        {attempts.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)' }}>No student attempts recorded yet.</p>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--surface-border)', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                  <th style={{ padding: '1rem', fontWeight: '500' }}>Student</th>
-                  <th style={{ padding: '1rem', fontWeight: '500' }}>Exam</th>
-                  <th style={{ padding: '1rem', fontWeight: '500' }}>Status</th>
-                  <th style={{ padding: '1rem', fontWeight: '500' }}>Date</th>
-                  <th style={{ padding: '1rem', fontWeight: '500', textAlign: 'right' }}>Score</th>
-                  <th style={{ padding: '1rem', fontWeight: '500', textAlign: 'center' }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {attempts.map(attempt => (
-                  <tr key={attempt._id} style={{ 
-                    borderBottom: '1px solid var(--surface-border)', 
-                    transition: 'background 0.2s', 
-                    background: attempt.is_disqualified ? (isDarkMode ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.03)') : 'transparent', 
-                    borderLeft: attempt.is_disqualified ? '3px solid var(--danger)' : 'none' 
-                  }}>
-                    <td style={{ padding: '1rem' }}>
-                      <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{attempt.student?.name || 'Unknown'}</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '500' }}>{attempt.student?.email || 'N/A'}</div>
-                    </td>
-                    <td style={{ padding: '1rem', color: 'var(--text-primary)' }}>{attempt.exam?.title || 'Deleted Exam'}</td>
-                    <td style={{ padding: '1rem' }}>
-                      <span style={{
-                        padding: '0.25rem 0.75rem',
-                        borderRadius: '999px',
-                        fontSize: '0.75rem',
-                        fontWeight: '600',
-                        background: attempt.is_disqualified ? 'rgba(239, 68, 68, 0.2)' : (attempt.status === 'completed' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)'),
-                        color: attempt.is_disqualified ? 'var(--danger)' : (attempt.status === 'completed' ? 'var(--success)' : 'var(--warning)')
-                      }}>
-                        {attempt.is_disqualified ? 'DISQUALIFIED 🚫' : (attempt.status ? attempt.status.toUpperCase() : 'UNKNOWN')}
-                      </span>
-                    </td>
-                    <td style={{ padding: '1rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                      {new Date(attempt.createdAt).toLocaleDateString()}
-                    </td>
-                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '600', fontSize: '1.1rem' }}>
-                      {attempt.is_disqualified
-                        ? <span style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: '700', letterSpacing: '0.03em' }}>— N/A</span>
-                        : <span style={{ color: 'var(--primary)' }}>{attempt.score}</span>
-                      }
-                    </td>
-                    <td style={{ padding: '1rem', textAlign: 'center' }}>
-                      <button
-                        onClick={(e) => handleDownloadReport(e, attempt.student._id, attempt.exam._id)}
-                        disabled={reportLoading}
-                        style={{
-                          background: 'rgba(13, 148, 136, 0.1)', border: '1px solid var(--primary)',
-                          color: 'var(--primary)', padding: '0.4rem 0.8rem', borderRadius: '6px',
-                          fontSize: '0.8rem', cursor: reportLoading ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        Download Report 📄
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <FileText size={24} color="var(--primary)" />
+            <h2 style={{ fontSize: '1.5rem', fontWeight: '600' }}>Student Results</h2>
           </div>
-        )}
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+             {/* Exam Filter Dropdown */}
+             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+               <Filter size={14} color="var(--text-secondary)" />
+               <select
+                 value={resultsExamFilter}
+                 onChange={(e) => setResultsExamFilter(e.target.value)}
+                 style={{
+                   background: 'var(--surface-panel)', color: 'var(--text-primary)', border: '1px solid var(--surface-border)',
+                   borderRadius: '8px', padding: '0.4rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer', outline: 'none', fontWeight: '500'
+                 }}
+               >
+                 <option value="all" style={{ background: isDarkMode ? '#1a1a2e' : '#fff' }}>All Exams</option>
+                 {exams.map(e => (
+                   <option key={e._id} value={e._id} style={{ background: isDarkMode ? '#1a1a2e' : '#fff' }}>{e.title}</option>
+                 ))}
+               </select>
+             </div>
+             
+             {/* Download Excel Button */}
+             {resultsExamFilter !== 'all' && (
+               <button
+                 className="btn-secondary"
+                 onClick={handleDownloadExcel}
+                 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#10b981', color: 'white', border: 'none', padding: '0.4rem 1rem', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '600' }}
+               >
+                 <Download size={16} /> Download Excel
+               </button>
+             )}
+          </div>
+        </div>
+
+        {(() => {
+          // Filter attempts
+          let displayAttempts = attempts;
+          if (resultsExamFilter !== 'all') {
+             displayAttempts = attempts.filter(a => a.exam?._id === resultsExamFilter || a.exam === resultsExamFilter);
+          }
+          
+          // Sort attempts
+          displayAttempts = [...displayAttempts].sort((a, b) => {
+            const { key, direction } = resultsSortConfig;
+            let valA, valB;
+            
+            if (key === 'name') {
+              valA = a.student?.name || ''; valB = b.student?.name || '';
+            } else if (key === 'score') {
+              valA = a.is_disqualified ? -1 : a.score; valB = b.is_disqualified ? -1 : b.score;
+            } else if (key === 'createdAt') {
+              valA = new Date(a.createdAt).getTime(); valB = new Date(b.createdAt).getTime();
+            } else {
+              valA = a[key] || ''; valB = b[key] || '';
+            }
+
+            if (valA < valB) return direction === 'asc' ? -1 : 1;
+            if (valA > valB) return direction === 'asc' ? 1 : -1;
+            return 0;
+          });
+
+          if (displayAttempts.length === 0) {
+            return <p style={{ color: 'var(--text-secondary)' }}>No results available for this exam.</p>;
+          }
+
+          return (
+            <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid var(--surface-border)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '800px' }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--surface-custom)' }}>
+                  <style>{` .dashboard-theme-provider { --surface-custom: ${isDarkMode ? 'rgba(30, 41, 59, 1)' : 'rgba(241, 245, 249, 1)'}; } `}</style>
+                  <tr style={{ borderBottom: '1px solid var(--surface-border)', color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <th style={{ padding: '1rem', fontWeight: '700', cursor: 'pointer' }} onClick={() => handleSortResults('name')}>
+                      Student {resultsSortConfig.key === 'name' && (resultsSortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th style={{ padding: '1rem', fontWeight: '700' }}>Student ID</th>
+                    <th style={{ padding: '1rem', fontWeight: '700' }}>Exam</th>
+                    <th style={{ padding: '1rem', fontWeight: '700' }}>Status</th>
+                    <th style={{ padding: '1rem', fontWeight: '700' }}>Timing</th>
+                    <th style={{ padding: '1rem', fontWeight: '700', cursor: 'pointer', textAlign: 'right' }} onClick={() => handleSortResults('score')}>
+                      Score {resultsSortConfig.key === 'score' && (resultsSortConfig.direction === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th style={{ padding: '1rem', fontWeight: '700', textAlign: 'center' }}>Report</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayAttempts.map((attempt, idx) => (
+                    <tr key={attempt._id} style={{ 
+                      borderBottom: '1px solid var(--surface-border)', 
+                      transition: 'background 0.2s', 
+                      background: attempt.is_disqualified ? (isDarkMode ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.03)') : (idx % 2 === 0 ? 'transparent' : 'rgba(128, 128, 128, 0.03)'), 
+                      borderLeft: attempt.is_disqualified ? '3px solid var(--danger)' : 'none' 
+                    }}>
+                      <td style={{ padding: '1rem' }}>
+                        <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{attempt.student?.name || 'Unknown'}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '500' }}>{attempt.student?.email || 'N/A'}</div>
+                      </td>
+                      <td style={{ padding: '1rem', fontSize: '0.85rem', fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                        {attempt.student?._id ? attempt.student._id.substring(0,8) : 'N/A'}
+                      </td>
+                      <td style={{ padding: '1rem', color: 'var(--text-primary)' }}>{attempt.exam?.title || 'Deleted Exam'}</td>
+                      <td style={{ padding: '1rem' }}>
+                        <span style={{
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '999px',
+                          fontSize: '0.75rem',
+                          fontWeight: '600',
+                          background: attempt.is_disqualified ? 'rgba(239, 68, 68, 0.2)' : (attempt.status === 'completed' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)'),
+                          color: attempt.is_disqualified ? 'var(--danger)' : (attempt.status === 'completed' ? 'var(--success)' : 'var(--warning)')
+                        }}>
+                          {attempt.is_disqualified ? 'DISQUALIFIED 🚫' : (attempt.status ? attempt.status.toUpperCase() : 'UNKNOWN')}
+                        </span>
+                      </td>
+                      <td style={{ padding: '1rem', fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                        <div><strong>Start:</strong> {new Date(attempt.startedAt).toLocaleString()}</div>
+                        {attempt.completedAt && <div><strong>End:</strong> {new Date(attempt.completedAt).toLocaleString()}</div>}
+                      </td>
+                      <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '600', fontSize: '1.2rem' }}>
+                        {attempt.is_disqualified
+                          ? <span style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: '700', letterSpacing: '0.03em' }}>— N/A</span>
+                          : <span style={{ color: 'var(--primary)' }}>{attempt.score}</span>
+                        }
+                      </td>
+                      <td style={{ padding: '1rem', textAlign: 'center' }}>
+                        <button
+                          onClick={(e) => handleDownloadReport(e, attempt.student._id, attempt.exam._id)}
+                          disabled={reportLoading}
+                          title="Download PDF Report"
+                          style={{
+                            background: 'rgba(13, 148, 136, 0.1)', border: '1px solid var(--primary)',
+                            color: 'var(--primary)', padding: '0.5rem', borderRadius: '8px', cursor: reportLoading ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          📄
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Detailed Student Violation Modal */}
@@ -1335,7 +1578,7 @@ const AdminDashboard = () => {
               </div>
 
               {/* ═══ Activity Timeline Panel ═══ */}
-              <ActivityTimeline history={selectedStudentGroup.history} />
+              <ActivityTimeline history={selectedStudentGroup.history} isDarkMode={isDarkMode} />
             </div>
           </div>
         </div>

@@ -5,7 +5,8 @@ const attemptSchema = new mongoose.Schema({
   exam: { type: mongoose.Schema.Types.ObjectId, ref: 'Exam', required: true },
   answers: [{
     questionId: { type: mongoose.Schema.Types.ObjectId, required: true },
-    selectedOptionIndex: { type: Number }
+    selectedOptionIndex: { type: Number },
+    fillText: { type: String }
   }],
   score: { type: Number, default: 0 },
   status: { type: String, enum: ['in-progress', 'completed', 'terminated'], default: 'in-progress' },
