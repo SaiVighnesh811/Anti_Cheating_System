@@ -77,19 +77,22 @@ const TakeExam = () => {
         }));
         setAnswers(initialAnswers);
 
-        // TIMER FIX: remaining = examEndTime - now, where examEndTime = startTime + duration
-        // This ensures late starters get LESS time, not the full duration
-        let examEndMs;
+        // STRICT TIMER: remaining = exam.endTime - now (late joiners get less time)
+        let examEndMs = null;
         if (examData.endTime) {
           examEndMs = new Date(examData.endTime).getTime();
         } else if (examData.startTime && examData.durationMinutes) {
           examEndMs = new Date(examData.startTime).getTime() + (examData.durationMinutes * 60000);
-        } else {
-          // No scheduled window set — give full duration from student's own start
-          examEndMs = new Date(currentAttempt.startedAt).getTime() + (examData.durationMinutes * 60000);
         }
-        const remaining = Math.max(0, (examEndMs - Date.now()) / 1000);
-        setTimeLeft(Math.floor(remaining));
+
+        if (examEndMs && Date.now() > examEndMs) {
+          alert('This exam has already ended.');
+          return navigate('/student');
+        }
+
+        // Store end time on window for timer access
+        const remaining = examEndMs ? Math.max(0, Math.floor((examEndMs - Date.now()) / 1000)) : examData.durationMinutes * 60;
+        setTimeLeft(remaining);
 
       } catch (err) {
         console.error('Error fetching exam', err);
@@ -180,19 +183,22 @@ const TakeExam = () => {
     }
 
     const timer = setInterval(() => {
-      const nowMs = Date.now();
-
-      // Compute global exam window end
-      let finalEndMs;
+      // Always compute remaining from wall clock — drift-free across refreshes
+      let finalEndMs = null;
       if (exam?.endTime) {
         finalEndMs = new Date(exam.endTime).getTime();
       } else if (exam?.startTime && exam?.durationMinutes) {
         finalEndMs = new Date(exam.startTime).getTime() + (exam.durationMinutes * 60000);
-      } else {
-        finalEndMs = new Date(attempt?.startedAt).getTime() + ((exam?.durationMinutes || 0) * 60000);
       }
 
-      if (nowMs >= finalEndMs && !submitting) {
+      const remaining = finalEndMs
+        ? Math.max(0, Math.floor((finalEndMs - Date.now()) / 1000))
+        : Math.max(0, timeLeft - 1);
+
+      setTimeLeft(remaining);
+      setTimerTick(t => !t);
+
+      if (remaining <= 0 && !submitting) {
         clearInterval(timer);
         submittingRef.current = true;
         setSubmitting(true);
@@ -209,13 +215,7 @@ const TakeExam = () => {
           console.error('Auto expiry submission failed', err);
           navigate('/student');
         });
-        return;
       }
-
-      // Recompute from wall clock every tick — refresh-safe and drift-free
-      const remaining = Math.max(0, Math.floor((finalEndMs - nowMs) / 1000));
-      setTimeLeft(remaining);
-      setTimerTick(t => !t);
     }, 1000);
 
     return () => clearInterval(timer);

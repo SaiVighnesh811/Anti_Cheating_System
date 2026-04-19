@@ -15,16 +15,23 @@ router.post('/', protect, async (req, res) => {
     return res.status(403).json({ message: 'Not authorized' });
   }
   try {
-    const { title, description, durationMinutes, questions } = req.body;
-    
+    const { title, description, durationMinutes, questions, startTime } = req.body;
+
+    // Auto-derive endTime from startTime + duration
+    const endTime = startTime
+      ? new Date(new Date(startTime).getTime() + (durationMinutes * 60 * 1000))
+      : null;
+
     const exam = new Exam({
       title,
       description,
       durationMinutes,
+      startTime: startTime ? new Date(startTime) : null,
+      endTime,
       questions,
       createdBy: req.user._id
     });
-    
+
     const createdExam = await exam.save();
     res.status(201).json(createdExam);
   } catch (error) {
@@ -38,7 +45,7 @@ router.post('/', protect, async (req, res) => {
 router.get('/', protect, async (req, res) => {
   try {
     let query = { isDeleted: false };
-    
+
     // Admins and SuperAdmins can see everything including deleted if we want
     // But per user request: "Show all exams where isDeleted != true"
     // and "Deleted Exams (Optional) - Show in separate section"
@@ -85,7 +92,7 @@ router.get('/:id', protect, async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ message: 'Exam not found' });
-    
+
     if (req.user.role !== 'admin') {
       // Students should not see the correct options before finishing
       exam.questions.forEach(q => {
@@ -93,7 +100,7 @@ router.get('/:id', protect, async (req, res) => {
         q.correctAnswerText = undefined;
       });
     }
-    
+
     res.json(exam);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -105,21 +112,29 @@ router.get('/:id', protect, async (req, res) => {
 // @access  Private/Admin
 router.put('/:id', protect, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
-     return res.status(403).json({ message: 'Not authorized' });
+    return res.status(403).json({ message: 'Not authorized' });
   }
   try {
     const { title, description, durationMinutes, startTime, endTime, questions } = req.body;
     const exam = await Exam.findById(req.params.id);
-    
+
     if (!exam) return res.status(404).json({ message: 'Exam not found' });
-    
+
     exam.title = title || exam.title;
     exam.description = description || exam.description;
-    exam.durationMinutes = durationMinutes || exam.durationMinutes;
-    exam.startTime = startTime || exam.startTime;
-    exam.endTime = endTime || exam.endTime;
-    exam.questions = questions || exam.questions;
+    exam.durationMinutes = durationMinutes !== undefined ? durationMinutes : exam.durationMinutes;
+
+    // Recalculate endTime based on startTime and durationMinutes
+    if (startTime) {
+      exam.startTime = new Date(startTime);
+    }
     
+    if (exam.startTime) {
+      exam.endTime = new Date(new Date(exam.startTime).getTime() + (exam.durationMinutes * 60 * 1000));
+    }
+
+    exam.questions = questions || exam.questions;
+
     const updatedExam = await exam.save();
     res.json(updatedExam);
   } catch (error) {
@@ -132,7 +147,7 @@ router.put('/:id', protect, async (req, res) => {
 // @access  Private/Admin
 router.delete('/:id', protect, async (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
-     return res.status(403).json({ message: 'Not authorized' });
+    return res.status(403).json({ message: 'Not authorized' });
   }
   try {
     const exam = await Exam.findById(req.params.id);

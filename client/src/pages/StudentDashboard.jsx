@@ -66,6 +66,9 @@ const StudentDashboard = () => {
       }
     };
     fetchStudentData();
+    const studentInterval = setInterval(fetchStudentData, 10000); // Poll every 10s
+
+    return () => clearInterval(studentInterval);
   }, []);
 
   // Countdown timer logic
@@ -312,22 +315,21 @@ const StudentDashboard = () => {
 
                   if (alreadyTaken) return null;
 
-                  const now = new Date();
-                  const start = exam.startTime ? new Date(exam.startTime) : null;
-                  // Compute exam end: use explicit endTime OR startTime + duration
-                  const end = exam.endTime
-                    ? new Date(exam.endTime)
-                    : (start ? new Date(start.getTime() + exam.durationMinutes * 60000) : null);
+                  const now = Date.now();
+                  const startMs = exam.startTime ? new Date(exam.startTime).getTime() : null;
+                  const endMs = exam.endTime
+                    ? new Date(exam.endTime).getTime()
+                    : (startMs ? startMs + exam.durationMinutes * 60000 : null);
 
                   let status = 'Active';
                   let canStart = true;
                   let statusColor = 'var(--success)';
 
-                  if (start && now < start) {
+                  if (startMs && now < startMs) {
                     status = 'Not Started';
                     canStart = false;
                     statusColor = 'var(--warning)';
-                  } else if (end && now > end) {
+                  } else if (endMs && now > endMs) {
                     status = 'Expired';
                     canStart = false;
                     statusColor = 'var(--danger)';
@@ -354,14 +356,14 @@ const StudentDashboard = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <Clock size={14} color="var(--primary)" /> <strong>Duration:</strong> {exam.durationMinutes}m
                         </div>
-                        {start && (
+                        {exam.startTime && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ width: 14, textAlign: 'center' }}>🗓️</div> <strong>Starts:</strong> {start.toLocaleString()}
+                            <div style={{ width: 14, textAlign: 'center' }}>🗓️</div> <strong>Starts:</strong> {new Date(exam.startTime).toLocaleString()}
                           </div>
                         )}
-                        {end && (
+                        {exam.endTime && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ width: 14, textAlign: 'center' }}>⏳</div> <strong>Ends:</strong> {end.toLocaleString()}
+                            <div style={{ width: 14, textAlign: 'center' }}>⏳</div> <strong>Ends:</strong> {new Date(exam.endTime).toLocaleString()}
                           </div>
                         )}
                       </div>

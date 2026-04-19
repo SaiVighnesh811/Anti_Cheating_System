@@ -11,6 +11,16 @@ const CreateExam = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = !!id;
+
+  // Helper to format Date for datetime-local input (YYYY-MM-DDTHH:mm)
+  const formatToDateTimeLocal = (date) => {
+    if (!date) return "";
+    const d = new Date(date);
+    const z = d.getTimezoneOffset() * 60 * 1000;
+    const local = new Date(d - z);
+    return local.toISOString().slice(0, 16);
+  };
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [durationMinutes, setDurationMinutes] = useState(60);
@@ -29,15 +39,15 @@ const CreateExam = () => {
         setLoading(true);
         try {
           const { data } = await api.get(`/exams/${id}`);
-          setTitle(data.title);
-          setDescription(data.description);
-          setDurationMinutes(data.durationMinutes);
+          setTitle(data.title || '');
+          setDescription(data.description || '');
+          setDurationMinutes(data.durationMinutes || 60);
           
           if (data.startTime) {
-            setStartTime(new Date(data.startTime).toISOString().slice(0, 16));
+            setStartTime(formatToDateTimeLocal(data.startTime));
           }
           if (data.endTime) {
-            setEndTime(new Date(data.endTime).toISOString().slice(0, 16));
+            setEndTime(formatToDateTimeLocal(data.endTime));
           }
           
           setQuestions(data.questions || []);

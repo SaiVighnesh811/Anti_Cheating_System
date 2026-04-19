@@ -28,12 +28,12 @@ router.post('/start', protect, async (req, res) => {
     if (exam.isDeleted) {
       return res.status(400).json({ message: 'Exam is deleted' });
     }
-    // Compute exam end: explicit endTime OR startTime + duration
-    const examEndTime = exam.endTime
-      ? new Date(exam.endTime)
-      : (exam.startTime ? new Date(new Date(exam.startTime).getTime() + exam.durationMinutes * 60000) : null);
-
-    if (examEndTime && new Date() > examEndTime) {
+    // Strict time-window enforcement using system clock
+    const now = Date.now();
+    if (exam.startTime && now < new Date(exam.startTime).getTime()) {
+      return res.status(400).json({ message: 'Exam has not started yet' });
+    }
+    if (exam.endTime && now > new Date(exam.endTime).getTime()) {
       return res.status(400).json({ message: 'This exam has expired' });
     }
 
@@ -70,8 +70,10 @@ router.post('/:id/submit', protect, async (req, res) => {
     if (exam.isDeleted) {
       return res.status(400).json({ message: 'Exam is deleted' });
     }
-    if (exam.endTime && new Date() > new Date(exam.endTime)) {
-      return res.status(400).json({ message: 'This exam has ended' });
+    // Allow submission up to 2 minutes after endTime to account for network delay on auto-submit
+    const now = Date.now();
+    if (exam.endTime && now > new Date(exam.endTime).getTime() + (2 * 60 * 1000)) {
+      return res.status(400).json({ message: 'Exam submission window has closed' });
     }
 
     let score = 0;
