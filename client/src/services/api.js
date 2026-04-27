@@ -6,15 +6,9 @@ const api = axios.create({
   baseURL: API_URL,
 });
 
+// Always read from THIS tab's sessionStorage — tab-isolated, no cross-user pollution
 api.interceptors.request.use((config) => {
-  const isAdminPage = window.location.pathname.startsWith('/admin');
-  const isSuperAdminPage = window.location.pathname.startsWith('/superadmin');
-
-  let token;
-  if (isAdminPage) token = localStorage.getItem('adminToken');
-  else if (isSuperAdminPage) token = localStorage.getItem('superAdminToken');
-  else token = localStorage.getItem('studentToken');
-
+  const token = sessionStorage.getItem('authToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

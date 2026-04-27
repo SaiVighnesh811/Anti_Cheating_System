@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { PlayCircle, Award, LogOut, Clock, BookOpen, Calendar, CheckCircle, AlertCircle, TrendingUp, Target, Activity, Timer } from 'lucide-react';
+import { PlayCircle, Award, LogOut, Clock, BookOpen, Calendar, CheckCircle, AlertCircle, TrendingUp, Target, Activity, Timer, ChevronDown } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -35,6 +35,7 @@ const StudentDashboard = () => {
   const [exams, setExams] = useState([]);
   const [myAttempts, setMyAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   // Theme state
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -171,9 +172,30 @@ const StudentDashboard = () => {
             >
               {isDarkMode ? '☀️ Light' : '🌙 Dark'}
             </button>
-            <button className="btn-secondary" onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.75rem 1.5rem', fontWeight: '600' }}>
-              <LogOut size={18} /> Logout Session
-            </button>
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="btn-secondary"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.4rem', paddingRight: '0.8rem', borderRadius: '50px', background: 'var(--surface-panel)', border: '1px solid var(--surface-border)' }}
+              >
+                {user?.profilePhoto ? (
+                  <img src={user.profilePhoto.startsWith('blob:') ? user.profilePhoto : `http://localhost:5000${user.profilePhoto}`} alt="Profile" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                    {user?.name?.charAt(0)?.toUpperCase()}
+                  </div>
+                )}
+                <span style={{ fontWeight: '600' }}>{user?.name?.split(' ')[0]}</span>
+                <ChevronDown size={16} />
+              </button>
+
+              {showDropdown && (
+                <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '0.5rem', background: 'var(--surface-panel)', border: '1px solid var(--surface-border)', borderRadius: '12px', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', minWidth: '180px', boxShadow: 'var(--card-shadow)', zIndex: 100 }}>
+                  <button onClick={() => navigate('/profile')} className="btn-secondary" style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.6rem 1rem', fontSize: '0.9rem', fontWeight: '500' }}>Profile Settings</button>
+                  <button onClick={logout} className="btn-secondary" style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.6rem 1rem', color: 'var(--danger)', fontSize: '0.9rem', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><LogOut size={16} /> Logout</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -251,90 +273,91 @@ const StudentDashboard = () => {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '2.5rem' }}>
 
-          {/* Next Exam Countdown */}
-          {nextExam && (
-            <div className="glass-panel" style={{
-              gridColumn: '1 / -1',
-              padding: '2rem',
-              borderRadius: '24px',
-              background: 'linear-gradient(135deg, var(--primary) 0%, #4f46e5 100%)',
-              color: '#fff',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              overflow: 'hidden',
-              position: 'relative'
-            }}>
-              <div style={{ position: 'relative', zIndex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', opacity: 0.9 }}>
-                  <Timer size={20} />
-                  <span style={{ fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.8rem' }}>Next Scheduled Assessment</span>
-                </div>
-                <h2 style={{ fontSize: '2rem', fontWeight: '800', margin: 0 }}>{nextExam.title}</h2>
-                <p style={{ margin: '0.5rem 0 0', opacity: 0.8, fontSize: '1rem' }}>Starts at {new Date(nextExam.startTime).toLocaleString()}</p>
-              </div>
-              <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
-                <div style={{ fontSize: '0.9rem', fontWeight: '600', opacity: 0.9, marginBottom: '0.25rem' }}>COMMENCING IN</div>
-                <div style={{ fontSize: '3.5rem', fontWeight: '900', fontFamily: 'monospace', letterSpacing: '2px', lineHeight: 1 }}>
-                  {timeLeft}
-                </div>
-              </div>
-              {/* Decorative background element */}
-              <div style={{
-                position: 'absolute',
-                right: '-50px',
-                top: '-50px',
-                width: '200px',
-                height: '200px',
-                background: 'rgba(255,255,255,0.1)',
-                borderRadius: '50%',
-                zIndex: 0
-              }}></div>
-            </div>
-          )}
 
-          {/* Available Exams Section */}
-          <div className="glass-panel" style={{ padding: '2.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-              <div style={{ background: 'var(--primary-light)', padding: '0.75rem', borderRadius: '14px' }}>
-                <BookOpen size={28} color="var(--primary)" />
-              </div>
-              <h2 style={{ fontSize: '1.75rem', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Open Assessments</h2>
-            </div>
 
+          {/* ── Upcoming Assessments ─────────────────────────────────────────────── */}
+          {(() => {
+            const upcomingExams = exams.filter(e =>
+              e.startTime && new Date(e.startTime).getTime() > Date.now()
+            );
+            return (
+              <div className="glass-panel" style={{ gridColumn: '1 / -1', padding: '2rem', borderRadius: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                    <div style={{ background: 'rgba(59,130,246,0.12)', padding: '0.65rem', borderRadius: '12px', display: 'flex' }}>
+                      <Calendar size={22} color="#3b82f6" />
+                    </div>
+                    <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '800', color: 'var(--text-primary)' }}>Upcoming Assessments</h2>
+                  </div>
+                  <span style={{ background: 'rgba(59,130,246,0.12)', color: '#3b82f6', padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.8rem', fontWeight: '700' }}>
+                    {upcomingExams.length} scheduled
+                  </span>
+                </div>
+                {upcomingExams.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-secondary)' }}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📅</div>
+                    <p style={{ margin: 0, fontWeight: '500' }}>No upcoming assessments scheduled.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                    {upcomingExams.map(exam => {
+                      const distance = new Date(exam.startTime).getTime() - Date.now();
+                      const hrs = Math.floor(distance / 3600000);
+                      const mins = Math.floor((distance % 3600000) / 60000);
+                      const countdownStr = hrs > 0 ? `Starts in ${hrs}h ${mins}m` : `Starts in ${mins}m`;
+                      return (
+                        <div key={exam._id} style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem',
+                          padding: '1rem 1.25rem', borderRadius: '12px',
+                          background: isDarkMode ? 'rgba(59,130,246,0.06)' : 'rgba(59,130,246,0.04)',
+                          border: '1px solid rgba(59,130,246,0.18)', borderLeft: '4px solid #3b82f6',
+                        }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: 0, fontWeight: '700', fontSize: '1.05rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{exam.title}</p>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.35rem', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: '500' }}>
+                              <span>🗓️ {new Date(exam.startTime).toLocaleString()}</span>
+                              <span>⏱ {exam.durationMinutes} min</span>
+                            </div>
+                          </div>
+                          <div style={{ background: 'rgba(59,130,246,0.12)', color: '#3b82f6', padding: '0.3rem 0.85rem', borderRadius: '999px', fontSize: '0.8rem', fontWeight: '700', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <Timer size={13} /> {countdownStr}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ── Open Assessments ─────────────────────────────────────────────────── */}
+          <div className="glass-panel" style={{ padding: '2rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1.5rem' }}>
+              <div style={{ background: 'var(--primary-light)', padding: '0.65rem', borderRadius: '12px', display: 'flex' }}>
+                <BookOpen size={22} color="var(--primary)" />
+              </div>
+              <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '800', color: 'var(--text-primary)' }}>Open Assessments</h2>
+            </div>
             {exams.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-muted)' }}>
+              <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-secondary)' }}>
                 <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📭</div>
-                <p style={{ fontWeight: '500' }}>No examination sessions scheduled at this time.</p>
+                <p style={{ fontWeight: '500', margin: 0 }}>No examination sessions scheduled at this time.</p>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 {exams.map(exam => {
                   const alreadyTaken = myAttempts.some(a => a.exam._id === exam._id && (a.status === 'completed' || a.is_disqualified));
                   const inProgress = myAttempts.find(a => a.exam._id === exam._id && a.status === 'in-progress' && !a.is_disqualified);
-
                   if (alreadyTaken) return null;
-
                   const now = Date.now();
                   const startMs = exam.startTime ? new Date(exam.startTime).getTime() : null;
-                  const endMs = exam.endTime
-                    ? new Date(exam.endTime).getTime()
-                    : (startMs ? startMs + exam.durationMinutes * 60000 : null);
-
-                  let status = 'Active';
-                  let canStart = true;
-                  let statusColor = 'var(--success)';
-
-                  if (startMs && now < startMs) {
-                    status = 'Not Started';
-                    canStart = false;
-                    statusColor = 'var(--warning)';
-                  } else if (endMs && now > endMs) {
-                    status = 'Expired';
-                    canStart = false;
-                    statusColor = 'var(--danger)';
-                  }
-
+                  const endMs = exam.endTime ? new Date(exam.endTime).getTime() : (startMs ? startMs + exam.durationMinutes * 60000 : null);
+                  let status = 'Active', canStart = true, statusColor = 'var(--success)';
+                  if (startMs && now < startMs) { status = 'Not Started'; canStart = false; statusColor = 'var(--warning)'; }
+                  else if (endMs && now > endMs) { status = 'Expired'; canStart = false; statusColor = 'var(--danger)'; }
+                  // Upcoming exams (Not Started) are shown in the section above
+                  if (status === 'Not Started') return null;
                   return (
                     <div key={exam._id} className="exam-card-hover" style={{
                       background: 'var(--surface-card)', padding: '1.75rem', borderRadius: '18px',
@@ -344,60 +367,23 @@ const StudentDashboard = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
                         <h3 style={{ fontSize: '1.3rem', fontWeight: '700', margin: 0, color: 'var(--text-primary)' }}>{exam.title}</h3>
                         <div style={{ background: `${statusColor}15`, color: statusColor, padding: '0.3rem 0.7rem', borderRadius: '8px', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          {status === 'Expired' && <span>🔴</span>}
-                          {status === 'Active' && <span>🟢</span>}
-                          {status === 'Not Started' && <span>🟡</span>}
-                          {status}
+                          {status === 'Expired' && <span>🔴</span>}{status === 'Active' && <span>🟢</span>}{status}
                         </div>
                       </div>
                       <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '1.25rem', lineHeight: '1.6' }}>{exam.description || 'Proctored examination session.'}</p>
-
                       <div style={{ marginBottom: '1.25rem', fontSize: '0.85rem', color: 'var(--text-secondary)', background: isDarkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', padding: '0.75rem', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <Clock size={14} color="var(--primary)" /> <strong>Duration:</strong> {exam.durationMinutes}m
-                        </div>
-                        {exam.startTime && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ width: 14, textAlign: 'center' }}>🗓️</div> <strong>Starts:</strong> {new Date(exam.startTime).toLocaleString()}
-                          </div>
-                        )}
-                        {exam.endTime && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <div style={{ width: 14, textAlign: 'center' }}>⏳</div> <strong>Ends:</strong> {new Date(exam.endTime).toLocaleString()}
-                          </div>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Clock size={14} color="var(--primary)" /> <strong>Duration:</strong> {exam.durationMinutes}m</div>
+                        {exam.startTime && <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>🗓️ <strong>Starts:</strong> {new Date(exam.startTime).toLocaleString()}</div>}
+                        {exam.endTime && <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>⏳ <strong>Ends:</strong> {new Date(exam.endTime).toLocaleString()}</div>}
                       </div>
-
                       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                         {inProgress ? (
-                          <button
-                            disabled={!canStart}
-                            onClick={() => canStart && navigate(`/student/exam/${inProgress._id}`)}
-                            className="btn-primary"
-                            style={{
-                              background: !canStart ? '#94a3b8' : 'var(--warning)',
-                              color: !canStart ? '#fff' : '#000',
-                              padding: '0.6rem 1.25rem',
-                              fontSize: '0.9rem',
-                              opacity: canStart ? 1 : 0.5,
-                              cursor: canStart ? 'pointer' : 'not-allowed'
-                            }}>
+                          <button disabled={!canStart} onClick={() => canStart && navigate(`/student/exam/${inProgress._id}`)} className="btn-primary" style={{ background: !canStart ? '#94a3b8' : 'var(--warning)', color: !canStart ? '#fff' : '#000', padding: '0.6rem 1.25rem', fontSize: '0.9rem', opacity: canStart ? 1 : 0.5, cursor: canStart ? 'pointer' : 'not-allowed' }}>
                             {canStart ? 'Resume Secure Session' : 'Assessment Closed'}
                           </button>
                         ) : (
-                          <button
-                            disabled={!canStart}
-                            onClick={() => canStart && handleStartExam(exam._id)}
-                            className="btn-primary"
-                            style={{
-                              padding: '0.6rem 1.5rem',
-                              fontSize: '0.9rem',
-                              opacity: canStart ? 1 : 0.5,
-                              cursor: canStart ? 'pointer' : 'not-allowed',
-                              background: !canStart ? '#94a3b8' : 'var(--primary)'
-                            }}
-                          >
-                            <PlayCircle size={18} /> {canStart ? 'Begin Exam' : status === 'Not Started' ? 'Not Started' : 'Assessment Closed'}
+                          <button disabled={!canStart} onClick={() => canStart && handleStartExam(exam._id)} className="btn-primary" style={{ padding: '0.6rem 1.5rem', fontSize: '0.9rem', opacity: canStart ? 1 : 0.5, cursor: canStart ? 'pointer' : 'not-allowed', background: !canStart ? '#94a3b8' : 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <PlayCircle size={18} /> {canStart ? 'Begin Exam' : 'Assessment Closed'}
                           </button>
                         )}
                       </div>

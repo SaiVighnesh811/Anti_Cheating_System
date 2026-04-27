@@ -1,0 +1,331 @@
+/*
+ * mobile.css — Mobile-only overrides (≤768px)
+ * DO NOT add desktop styles here.
+ * All rules are wrapped in @media (max-width: 768px)
+ */
+
+/* ── Global Mobile Base ───────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  body {
+    overflow-x: hidden;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  /* Prevent any element from causing horizontal scroll */
+  * {
+    max-width: 100%;
+    word-break: break-word;
+  }
+
+  /* ── Page Container ───────────────────────────────────────── */
+  .page-container {
+    padding: 1.25rem 1rem;
+  }
+
+  /* ── Toast — keep on screen ───────────────────────────────── */
+  .toast-container {
+    top: auto;
+    bottom: 1rem;
+    right: 0.75rem;
+    left: 0.75rem;
+  }
+
+  .toast {
+    min-width: unset;
+    width: 100%;
+    max-width: 100%;
+    font-size: 0.9rem;
+  }
+
+  /* ── Buttons — larger tap targets ─────────────────────────── */
+  .btn-primary,
+  .btn-secondary {
+    padding: 0.85rem 1.2rem;
+    min-height: 48px;
+    font-size: 0.95rem;
+  }
+
+  /* ── Inputs — larger touch area ───────────────────────────── */
+  .input-field,
+  .input-field-enhanced {
+    padding: 1rem 1rem 1rem 1.2rem;
+    font-size: 1rem;
+    min-height: 48px;
+  }
+
+  /* ── Auth Panel ───────────────────────────────────────────── */
+  .auth-panel {
+    padding: 2rem 1.25rem;
+    border-radius: 16px;
+  }
+
+  /* ── Glass panel — no hover lift on touch ─────────────────── */
+  .glass-panel:hover {
+    transform: none;
+  }
+
+  /* ── Warning modal ────────────────────────────────────────── */
+  .warning-modal {
+    padding: 1.75rem 1.25rem;
+    width: 96%;
+    border-radius: 16px;
+  }
+
+  /* ── Page Title ───────────────────────────────────────────── */
+  .page-title {
+    font-size: 1.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+}
+
+/* ── Student Dashboard ────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Stack the main 2-column grid to single column */
+  .student-theme-provider .page-container > div[style*="grid"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1.25rem !important;
+  }
+
+  /* Summary stat cards — 2-column grid */
+  .student-theme-provider div[style*="repeat(auto-fit, minmax(240px"] {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.75rem !important;
+    margin-bottom: 1.5rem !important;
+  }
+
+  /* Header: stack vertically */
+  .student-theme-provider div[style*="justify-content: space-between"][style*="align-items: center"][style*="margin-bottom: 3.5rem"] {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 1rem !important;
+    margin-bottom: 1.5rem !important;
+  }
+
+  /* Exam cards: full width options */
+  .exam-card-hover button.btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+}
+
+/* ── Admin / SuperAdmin Dashboard ────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Convert tables to stacked cards */
+  .dashboard-theme-provider table,
+  .dashboard-theme-provider thead,
+  .dashboard-theme-provider tbody,
+  .dashboard-theme-provider th,
+  .dashboard-theme-provider td,
+  .dashboard-theme-provider tr {
+    display: block !important;
+  }
+
+  .dashboard-theme-provider thead {
+    display: none !important; /* hide column headers on mobile */
+  }
+
+  .dashboard-theme-provider tr {
+    margin-bottom: 1rem !important;
+    padding: 1rem !important;
+    border: 1px solid var(--surface-border) !important;
+    border-radius: 12px !important;
+    background: var(--surface-panel, #fff) !important;
+  }
+
+  .dashboard-theme-provider td {
+    padding: 0.4rem 0 !important;
+    border: none !important;
+    font-size: 0.9rem !important;
+    word-break: break-word !important;
+  }
+
+  .dashboard-theme-provider td::before {
+    content: attr(data-label);
+    display: block;
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: var(--text-secondary, #64748b);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.2rem;
+  }
+
+  /* Main grid: single column */
+  .dashboard-theme-provider div[style*="grid-template-columns: 2fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Header: stack on mobile */
+  .dashboard-theme-provider div[style*="justify-content: space-between"][style*="margin-bottom: 3rem"] {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 1rem !important;
+    margin-bottom: 1.5rem !important;
+  }
+
+  /* Student search dropdown */
+  div[style*="max-height"][style*="overflow-y"] {
+    max-height: 200px !important;
+    overflow-y: auto !important;
+  }
+
+}
+
+/* ── Exam Interface (TakeExam) — Mobile ───────────────────────── */
+@media (max-width: 768px) {
+
+  /* Main 70/30 split → full-width vertical stack */
+  div.exam-main-layout {
+    flex-direction: column !important;
+    height: auto !important;
+    overflow: auto !important;
+  }
+
+  /* Left panel (question) */
+  div.exam-question-panel {
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 1rem !important;
+  }
+
+  /* Right panel (sidebar/camera) */
+  div.exam-sidebar-panel {
+    width: 100% !important;
+    height: auto !important;
+    order: -1; /* show above question */
+    padding: 1rem !important;
+  }
+
+  /* Sticky exam header bar */
+  div.exam-header-bar {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1000 !important;
+  }
+
+  /* Camera: reduce size on mobile */
+  div.exam-camera-feed video,
+  div.exam-camera-feed canvas {
+    width: 100% !important;
+    max-height: 160px !important;
+    object-fit: cover !important;
+    border-radius: 10px !important;
+  }
+
+  /* Options — full width, taller tap target */
+  div.exam-options label,
+  div.exam-options div[role="radio"],
+  div.exam-options div[role="checkbox"] {
+    width: 100% !important;
+    min-height: 48px !important;
+    margin-bottom: 10px !important;
+    padding: 0.75rem 1rem !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  /* Navigation bar — sticky bottom */
+  div.exam-nav-buttons {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 999 !important;
+    background: var(--surface-color, #fff) !important;
+    padding: 0.75rem 1rem !important;
+    border-top: 1px solid var(--surface-border) !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+  }
+
+  div.exam-nav-buttons button {
+    flex: 1 !important;
+    min-width: calc(50% - 0.25rem) !important;
+    min-height: 48px !important;
+    font-size: 0.85rem !important;
+    justify-content: center !important;
+  }
+
+  /* Question navigator grid — smaller cells */
+  div.exam-question-grid {
+    grid-template-columns: repeat(7, 1fr) !important;
+    gap: 0.35rem !important;
+  }
+
+  div.exam-question-grid button {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 0.75rem !important;
+  }
+
+  /* TakeExam inline styles override (exam interface header) */
+  div[style*="display: flex"][style*="position: sticky"][style*="top: 0"] {
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    padding: 0.75rem 1rem !important;
+  }
+
+  /* Subject tabs — scrollable row */
+  div[style*="display: flex"][style*="gap"][style*="overflow"] {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    flex-wrap: nowrap !important;
+    padding-bottom: 4px !important;
+  }
+
+}
+
+/* ── Create Exam Page ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Question options grid → single column */
+  div[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Form buttons → full width */
+  form button.btn-primary {
+    width: 100%;
+  }
+
+}
+
+/* ── Profile Page ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Profile header */
+  header.glass-panel[style*="display: flex"] {
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+    padding: 1rem !important;
+  }
+
+  /* Save button → full width */
+  div[style*="justify-content: flex-end"] > button.btn-primary {
+    width: 100%;
+  }
+
+}
+
+/* ── Violations panel text wrap ───────────────────────────────── */
+@media (max-width: 768px) {
+
+  .timeline-panel {
+    font-size: 0.85rem !important;
+  }
+
+  .timeline-panel td,
+  .timeline-panel th {
+    padding: 0.5rem 0.3rem !important;
+    font-size: 0.8rem !important;
+    word-break: break-word !important;
+  }
+
+}

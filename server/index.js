@@ -7,7 +7,14 @@ import examRoutes from './routes/exam.js';
 import attemptRoutes from './routes/attempt.js';
 import reportRoutes from './routes/report.js';
 import superadminRoutes from './routes/superadmin.js';
+import studentRoutes from './routes/student.js';
+import userRoutes from './routes/user.js';
 import User from './models/User.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -24,6 +31,9 @@ app.use('/api/exams', examRoutes);
 app.use('/api/attempts', attemptRoutes);
 app.use('/api/report', reportRoutes);
 app.use('/api/superadmin', superadminRoutes);
+app.use('/api/students', studentRoutes);
+app.use('/api/user', userRoutes);
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Database Connection
 mongoose.connect(process.env.MONGODB_URI)

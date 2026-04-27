@@ -16,6 +16,7 @@ import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import StudentDashboard from './pages/StudentDashboard';
 import TakeExam from './pages/TakeExam';
 import ReviewExam from './pages/ReviewExam';
+import Profile from './pages/Profile';
 import { ToastProvider } from './context/ToastContext';
 
 const ProtectedRoute = ({ children, roleRequired }) => {
@@ -62,6 +63,10 @@ function App() {
           } />
           <Route path="/student/review/:id" element={
             <ProtectedRoute roleRequired="student"><ReviewExam /></ProtectedRoute>
+          } />
+          
+          <Route path="/profile" element={
+            <ProtectedRoute><Profile /></ProtectedRoute>
           } />
         </Routes>
       </Router>

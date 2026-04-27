@@ -17,6 +17,7 @@ const examSchema = new mongoose.Schema({
   startTime: { type: Date },
   endTime: { type: Date },
   questions: [questionSchema],
+  allowedStudents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   isActive: { type: Boolean, default: true },
   isDeleted: { type: Boolean, default: false }

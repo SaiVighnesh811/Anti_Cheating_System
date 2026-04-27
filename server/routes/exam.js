@@ -15,7 +15,7 @@ router.post('/', protect, async (req, res) => {
     return res.status(403).json({ message: 'Not authorized' });
   }
   try {
-    const { title, description, durationMinutes, questions, startTime } = req.body;
+    const { title, description, durationMinutes, questions, startTime, allowedStudents } = req.body;
 
     // Auto-derive endTime from startTime + duration
     const endTime = startTime
@@ -29,6 +29,7 @@ router.post('/', protect, async (req, res) => {
       startTime: startTime ? new Date(startTime) : null,
       endTime,
       questions,
+      allowedStudents: allowedStudents || [],
       createdBy: req.user._id
     });
 
@@ -72,6 +73,14 @@ router.get('/', protect, async (req, res) => {
         } else if (exam.startTime && exam.durationMinutes) {
           examEnd = new Date(new Date(exam.startTime).getTime() + exam.durationMinutes * 60000);
         }
+        
+        // Filter by allowedStudents
+        if (exam.allowedStudents && exam.allowedStudents.length > 0) {
+          if (!exam.allowedStudents.map(id => id.toString()).includes(req.user._id.toString())) {
+            return false;
+          }
+        }
+
         // If no end time computable, show exam (no window defined)
         if (!examEnd) return true;
         // Hide if the exam window has already passed
@@ -115,7 +124,7 @@ router.put('/:id', protect, async (req, res) => {
     return res.status(403).json({ message: 'Not authorized' });
   }
   try {
-    const { title, description, durationMinutes, startTime, endTime, questions } = req.body;
+    const { title, description, durationMinutes, startTime, endTime, questions, allowedStudents } = req.body;
     const exam = await Exam.findById(req.params.id);
 
     if (!exam) return res.status(404).json({ message: 'Exam not found' });
@@ -134,6 +143,7 @@ router.put('/:id', protect, async (req, res) => {
     }
 
     exam.questions = questions || exam.questions;
+    if (allowedStudents !== undefined) exam.allowedStudents = allowedStudents;
 
     const updatedExam = await exam.save();
     res.json(updatedExam);

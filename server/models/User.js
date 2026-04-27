@@ -6,6 +6,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role: { type: String, enum: ['admin', 'student', 'superadmin'], default: 'student' },
+  profilePhoto: { type: String, default: null },
   otp: { type: String },
   otp_expiry: { type: Date }
 }, { timestamps: true });

@@ -189,10 +189,11 @@ const AdminDashboard = () => {
           )}
         </div>
       </div>
-      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', gap: '1rem' }}>
+      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>⏱️ {exam.durationMinutes}m</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>🧩 {exam.questions?.length || 0} Questions</span>
         {exam.startTime && <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>📅 {new Date(exam.startTime).toLocaleDateString()}</span>}
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'rgba(13,148,136,0.1)', color: 'var(--primary)', padding: '0.1rem 0.5rem', borderRadius: '4px', fontWeight: '600' }}>👥 {exam.allowedStudents?.length > 0 ? `${exam.allowedStudents.length} Assigned` : 'All Students'}</span>
       </div>
     </div>
   );
@@ -977,9 +978,29 @@ const AdminDashboard = () => {
           >
             {isDarkMode ? '☀️ Light' : '🌙 Dark'}
           </button>
-          <button className="btn-secondary" onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <LogOut size={18} /> Logout
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button 
+              onClick={() => document.getElementById('admin-profile-menu').classList.toggle('show')}
+              className="btn-secondary" 
+              style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.4rem', paddingRight: '0.8rem', borderRadius: '50px', background: 'var(--surface-panel)', border: '1px solid var(--surface-border)' }}
+            >
+              {user?.profilePhoto ? (
+                <img src={user.profilePhoto.startsWith('blob:') ? user.profilePhoto : `http://localhost:5000${user.profilePhoto}`} alt="Profile" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                  {user?.name?.charAt(0)?.toUpperCase()}
+                </div>
+              )}
+              <span style={{ fontWeight: '600' }}>{user?.name?.split(' ')[0]}</span>
+              <ChevronDown size={16} />
+            </button>
+
+            <div id="admin-profile-menu" className="admin-dropdown-menu" style={{ position: 'absolute', top: '100%', right: 0, marginTop: '0.5rem', background: 'var(--surface-panel)', border: '1px solid var(--surface-border)', borderRadius: '12px', padding: '0.5rem', display: 'none', flexDirection: 'column', gap: '0.25rem', minWidth: '180px', boxShadow: 'var(--card-shadow)', zIndex: 100 }}>
+              <Link to="/profile" className="btn-secondary" style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.6rem 1rem', fontSize: '0.9rem', fontWeight: '500', textDecoration: 'none', color: 'var(--text-primary)', display: 'block' }}>Profile Settings</Link>
+              <button onClick={logout} className="btn-secondary" style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent', padding: '0.6rem 1rem', color: 'var(--danger)', fontSize: '0.9rem', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><LogOut size={16} /> Logout</button>
+            </div>
+          </div>
+          <style>{`.admin-dropdown-menu.show { display: flex !important; }`}</style>
         </div>
       </div>
 

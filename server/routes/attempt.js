@@ -28,6 +28,14 @@ router.post('/start', protect, async (req, res) => {
     if (exam.isDeleted) {
       return res.status(400).json({ message: 'Exam is deleted' });
     }
+    
+    // Check if student is allowed
+    if (exam.allowedStudents && exam.allowedStudents.length > 0) {
+      if (!exam.allowedStudents.map(id => id.toString()).includes(req.user._id.toString())) {
+        return res.status(403).json({ message: 'You are not allowed to access this exam' });
+      }
+    }
+
     // Strict time-window enforcement using system clock
     const now = Date.now();
     if (exam.startTime && now < new Date(exam.startTime).getTime()) {
@@ -70,6 +78,14 @@ router.post('/:id/submit', protect, async (req, res) => {
     if (exam.isDeleted) {
       return res.status(400).json({ message: 'Exam is deleted' });
     }
+    
+    // Check if student is allowed
+    if (exam.allowedStudents && exam.allowedStudents.length > 0) {
+      if (!exam.allowedStudents.map(id => id.toString()).includes(req.user._id.toString())) {
+        return res.status(403).json({ message: 'You are not allowed to access this exam' });
+      }
+    }
+
     // Allow submission up to 2 minutes after endTime to account for network delay on auto-submit
     const now = Date.now();
     if (exam.endTime && now > new Date(exam.endTime).getTime() + (2 * 60 * 1000)) {

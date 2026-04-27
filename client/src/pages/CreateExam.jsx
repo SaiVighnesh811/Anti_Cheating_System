@@ -5,6 +5,29 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { PlusCircle, Trash2, ArrowLeft, Save, Image as ImageIcon, Type, Edit3, AlertCircle } from 'lucide-react';
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '2rem', textAlign: 'center', marginTop: '5rem' }}>
+          <h2 style={{color: 'var(--danger)'}}>Something went wrong. Please refresh.</h2>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const CreateExam = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -26,11 +49,30 @@ const CreateExam = () => {
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [allowedStudents, setAllowedStudents] = useState([]);
+  const [availableStudents, setAvailableStudents] = useState([]);
   const [questions, setQuestions] = useState([
-    { type: 'mcq-text', questionText: '', questionImage: '', options: ['', '', '', ''], optionImages: ['', '', '', ''], correctOptionIndex: 0, correctAnswerText: '' }
+    { type: 'mcq-text', questionType: 'single', correctAnswer: [], questionText: '', questionImage: '', options: ['', '', '', ''], optionImages: ['', '', '', ''], correctOptionIndex: 0, correctAnswerText: '' }
   ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [searchText, setSearchText] = useState('');
+
+  // Fetch available students
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        if (user?.role === 'admin' || user?.role === 'superadmin') {
+          const { data } = await api.get('/students');
+          console.log("Students:", data);
+          setAvailableStudents(data || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch students", err);
+      }
+    };
+    fetchStudents();
+  }, [user]);
 
   // Initialize or Fetch Data
   useEffect(() => {
@@ -50,7 +92,27 @@ const CreateExam = () => {
             setEndTime(formatToDateTimeLocal(data.endTime));
           }
           
-          setQuestions(data.questions || []);
+          let loadedQuestions = data.questions || [];
+          if (!Array.isArray(loadedQuestions)) loadedQuestions = [];
+          
+          loadedQuestions = loadedQuestions.map(q => {
+            let parsedCorrectAnswer = q.correctAnswer;
+            if (typeof parsedCorrectAnswer === 'string') {
+              parsedCorrectAnswer = [parsedCorrectAnswer];
+            } else if (!Array.isArray(parsedCorrectAnswer)) {
+              parsedCorrectAnswer = [];
+            }
+            return {
+              ...q,
+              questionType: q.questionType || 'single',
+              correctAnswer: parsedCorrectAnswer
+            };
+          });
+          
+          setQuestions(loadedQuestions);
+          console.log("Exam:", data);
+          console.log("Questions:", loadedQuestions);
+          setAllowedStudents(data.allowedStudents || []);
         } catch (err) {
           setError('Failed to load exam data');
           showToast('Failed to load exam data', 'error');
@@ -88,7 +150,7 @@ const CreateExam = () => {
   }, [startTime, durationMinutes]);
 
   const addQuestion = () => {
-    setQuestions([...questions, { type: 'mcq-text', questionText: '', questionImage: '', options: ['', '', '', ''], optionImages: ['', '', '', ''], correctOptionIndex: 0, correctAnswerText: '' }]);
+    setQuestions(Array.isArray(questions) ? [...questions, { type: 'mcq-text', questionType: 'single', correctAnswer: [], questionText: '', questionImage: '', options: ['', '', '', ''], optionImages: ['', '', '', ''], correctOptionIndex: 0, correctAnswerText: '' }] : [{ type: 'mcq-text', questionType: 'single', correctAnswer: [], questionText: '', questionImage: '', options: ['', '', '', ''], optionImages: ['', '', '', ''], correctOptionIndex: 0, correctAnswerText: '' }]);
   };
 
   const removeQuestion = (index) => {
@@ -177,7 +239,8 @@ const CreateExam = () => {
         durationMinutes, 
         startTime: startTime || null,
         endTime: endTime || null,
-        questions 
+        questions,
+        allowedStudents
       };
 
       if (isEditMode) {
@@ -199,6 +262,11 @@ const CreateExam = () => {
       setLoading(false);
     }
   };
+
+  const filteredStudents = Array.isArray(availableStudents) ? availableStudents.filter(s =>
+    (s.name?.toLowerCase() || '').includes((searchText || '').toLowerCase()) ||
+    (s.email?.toLowerCase() || '').includes((searchText || '').toLowerCase())
+  ) : [];
 
   return (
     <div className="page-container" style={{ maxWidth: '900px', padding: '2rem', animation: 'fadeIn 0.6s ease-out' }}>
@@ -287,6 +355,56 @@ const CreateExam = () => {
             />
           </div>
 
+          <div className="input-group" style={{ marginBottom: '3rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+              <label style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>Access Control (Optional)</label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: '600', cursor: 'pointer', color: 'var(--primary)' }}>
+                <input 
+                  type="checkbox" 
+                  checked={Array.isArray(allowedStudents) && Array.isArray(availableStudents) && allowedStudents.length === availableStudents.length && availableStudents.length > 0} 
+                  onChange={(e) => setAllowedStudents(e.target.checked && Array.isArray(availableStudents) ? availableStudents.map(s => s.userId) : [])} 
+                  style={{ accentColor: 'var(--primary)', width: '16px', height: '16px', cursor: 'pointer' }} />
+                Select All Students
+              </label>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0 0 1rem 0' }}>If no students are selected, the exam will be accessible to all registered students by default.</p>
+            <input 
+               type="text" 
+               placeholder="Search students..." 
+               value={searchText} 
+               onChange={(e) => setSearchText(e.target.value || "")} 
+               className="input-field-enhanced" 
+               style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1.5px solid #e2e8f0' }} 
+            />
+            <div style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '12px', padding: '1rem', maxHeight: '200px', overflowY: 'auto' }}>
+               {!availableStudents ? (
+                 <p style={{ color: 'var(--text-muted)', textAlign: 'center', margin: '1rem 0' }}>Loading students...</p>
+               ) : filteredStudents.length === 0 ? (
+                 <p style={{ color: 'var(--text-muted)', textAlign: 'center', margin: '1rem 0' }}>No students found.</p>
+               ) : (
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                   {filteredStudents.map(student => (
+                     <label key={student.userId} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s', background: Array.isArray(allowedStudents) && allowedStudents.includes(student.userId) ? 'rgba(13,148,136,0.05)' : 'transparent' }} onMouseOver={e => e.currentTarget.style.background = Array.isArray(allowedStudents) && allowedStudents.includes(student.userId) ? 'rgba(13,148,136,0.05)' : '#e2e8f0'} onMouseOut={e => e.currentTarget.style.background = Array.isArray(allowedStudents) && allowedStudents.includes(student.userId) ? 'rgba(13,148,136,0.05)' : 'transparent'}>
+                       <input 
+                         type="checkbox" 
+                         checked={Array.isArray(allowedStudents) && allowedStudents.includes(student.userId)}
+                         onChange={(e) => {
+                           if (e.target.checked) setAllowedStudents(prev => Array.isArray(prev) ? [...prev, student.userId] : [student.userId]);
+                           else setAllowedStudents(prev => Array.isArray(prev) ? prev.filter(id => id !== student.userId) : []);
+                         }}
+                         style={{ accentColor: 'var(--primary)', width: '18px', height: '18px', cursor: 'pointer' }}
+                       />
+                       <div>
+                         <span style={{ display: 'block', fontWeight: '600', color: 'var(--text-primary)', fontSize: '0.95rem' }}>{student.name}</span>
+                         <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{student.email}</span>
+                       </div>
+                     </label>
+                   ))}
+                 </div>
+               )}
+            </div>
+          </div>
+
           <div style={{ margin: '4rem 0 2rem 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid var(--primary-light)', paddingBottom: '1rem' }}>
             <h2 style={{ fontSize: '1.75rem', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Question Reservoir</h2>
             <button type="button" onClick={addQuestion} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1.2rem', fontWeight: '700' }}>
@@ -295,7 +413,7 @@ const CreateExam = () => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-            {questions.map((q, qIndex) => (
+            {Array.isArray(questions) && questions.map((q, qIndex) => (
               <div key={qIndex} style={{ background: '#f8fafc', border: '1.5px solid #e2e8f0', padding: '2rem', borderRadius: '18px', position: 'relative', transition: 'all 0.3s ease' }}>
                 <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem' }}>
                   {questions.length > 1 && (
@@ -310,16 +428,34 @@ const CreateExam = () => {
                     <span style={{ background: 'var(--primary)', color: '#fff', width: '28px', height: '28px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '0.85rem' }}>{qIndex + 1}</span>
                     <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '700', color: 'var(--text-primary)' }}>Question Format</h3>
                   </div>
-                  <select
-                     className="input-field-enhanced"
-                     style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontWeight: '600' }}
-                     value={q.type || 'mcq-text'}
-                     onChange={(e) => updateQuestion(qIndex, 'type', e.target.value)}
-                  >
-                     <option value="mcq-text">MCQ (Text)</option>
-                     <option value="mcq-image">MCQ (Image)</option>
-                     <option value="fill-in-blank">Fill in the Blank</option>
-                  </select>
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    {q.type !== 'fill-in-blank' && (
+                      <select
+                         className="input-field-enhanced"
+                         style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontWeight: '600' }}
+                         value={q.questionType || 'single'}
+                         onChange={(e) => {
+                           updateQuestion(qIndex, 'questionType', e.target.value);
+                           if (e.target.value === 'single') {
+                             updateQuestion(qIndex, 'correctAnswer', q.correctAnswer?.length ? [q.correctAnswer[0]] : []);
+                           }
+                         }}
+                      >
+                         <option value="single">Single Correct</option>
+                         <option value="multiple">Multiple Correct</option>
+                      </select>
+                    )}
+                    <select
+                       className="input-field-enhanced"
+                       style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontWeight: '600' }}
+                       value={q.type || 'mcq-text'}
+                       onChange={(e) => updateQuestion(qIndex, 'type', e.target.value)}
+                    >
+                       <option value="mcq-text">MCQ (Text)</option>
+                       <option value="mcq-image">MCQ (Image)</option>
+                       <option value="fill-in-blank">Fill in the Blank</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div className="input-group">
@@ -368,13 +504,26 @@ const CreateExam = () => {
                      {q.options.map((opt, optIndex) => (
                        <div key={optIndex} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'white', padding: '1rem', borderRadius: '12px', border: '1.5px solid #e2e8f0', position: 'relative' }}>
                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <input
-                              type="radio"
-                              name={`correct-${qIndex}`}
-                              checked={q.correctOptionIndex === optIndex}
-                              onChange={() => updateQuestion(qIndex, 'correctOptionIndex', optIndex)}
-                              style={{ cursor: 'pointer', width: '20px', height: '20px', accentColor: 'var(--primary)' }}
-                            />
+                             <input
+                               type={q.questionType === 'multiple' ? "checkbox" : "radio"}
+                               name={`correct-${qIndex}`}
+                               checked={q.questionType === 'multiple' ? (Array.isArray(q.correctAnswer) && (q.correctAnswer.includes(String(optIndex)) || q.correctAnswer.includes(opt))) : q.correctOptionIndex === optIndex}
+                               onChange={() => {
+                                 if (q.questionType === 'multiple') {
+                                   let currentAns = Array.isArray(q.correctAnswer) ? q.correctAnswer : [];
+                                   const val = opt || String(optIndex);
+                                   if (currentAns.includes(val) || currentAns.includes(String(optIndex))) {
+                                     updateQuestion(qIndex, 'correctAnswer', currentAns.filter(a => a !== val && a !== String(optIndex)));
+                                   } else {
+                                     updateQuestion(qIndex, 'correctAnswer', [...currentAns, val]);
+                                   }
+                                 } else {
+                                   updateQuestion(qIndex, 'correctOptionIndex', optIndex);
+                                   updateQuestion(qIndex, 'correctAnswer', [opt || String(optIndex)]);
+                                 }
+                               }}
+                               style={{ cursor: 'pointer', width: '20px', height: '20px', accentColor: 'var(--primary)' }}
+                             />
                             <input
                               type="text"
                               className="input-field-enhanced"
@@ -420,4 +569,10 @@ const CreateExam = () => {
   );
 };
 
-export default CreateExam;
+export default function CreateExamWrapper(props) {
+  return (
+    <ErrorBoundary>
+      <CreateExam {...props} />
+    </ErrorBoundary>
+  );
+}

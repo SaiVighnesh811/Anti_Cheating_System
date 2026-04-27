@@ -23,6 +23,8 @@ const TakeExam = () => {
 
   // ── UI-only state ───────────────────────────────────────────────────────
   const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [questionStatuses, setQuestionStatuses] = useState([]);
+  const [showRightPanel, setShowRightPanel] = useState(false);
   const [activityLog, setActivityLog] = useState([]);
   const [timerTick, setTimerTick] = useState(false);
   const [showViolationGlow, setShowViolationGlow] = useState(false);
@@ -93,6 +95,7 @@ const TakeExam = () => {
         // Store end time on window for timer access
         const remaining = examEndMs ? Math.max(0, Math.floor((examEndMs - Date.now()) / 1000)) : examData.durationMinutes * 60;
         setTimeLeft(remaining);
+        setQuestionStatuses(Array(examData.questions.length).fill('not_visited'));
 
       } catch (err) {
         console.error('Error fetching exam', err);
@@ -249,12 +252,33 @@ const TakeExam = () => {
     setAnswers(prev => prev.map(a =>
       a.questionId === qId ? { ...a, selectedOptionIndex: optionIndex } : a
     ));
+    setQuestionStatuses(prev => {
+      const newStatuses = [...prev];
+      if (newStatuses[currentQuestion] !== 'marked_review' && newStatuses[currentQuestion] !== 'answered_marked_review') {
+        newStatuses[currentQuestion] = 'answered';
+      } else if (newStatuses[currentQuestion] === 'marked_review') {
+        newStatuses[currentQuestion] = 'answered_marked_review';
+      }
+      return newStatuses;
+    });
   };
 
   const handleTextFill = (qId, value) => {
     setAnswers(prev => prev.map(a =>
       a.questionId === qId ? { ...a, fillText: value } : a
     ));
+    // Also mark as answered immediately when typing
+    if (value && value.trim().length > 0) {
+      setQuestionStatuses(prev => {
+        const newStatuses = [...prev];
+        if (newStatuses[currentQuestion] !== 'marked_review' && newStatuses[currentQuestion] !== 'answered_marked_review') {
+          newStatuses[currentQuestion] = 'answered';
+        } else if (newStatuses[currentQuestion] === 'marked_review') {
+          newStatuses[currentQuestion] = 'answered_marked_review';
+        }
+        return newStatuses;
+      });
+    }
   };
 
   const handleFinalSubmit = async () => {
@@ -459,8 +483,34 @@ const TakeExam = () => {
           50% { box-shadow: inset 0 0 100px 20px rgba(239, 68, 68, 0.2); }
           100% { box-shadow: inset 0 0 0px 0px rgba(239, 68, 68, 0); }
         }
+        @media (max-width: 1024px) {
+          .main-layout { grid-template-columns: 1fr !important; }
+          .sidebar-panel { display: var(--show-sidebar, none) !important; flex-direction: column !important; }
+          .toggle-sidebar-btn { display: block !important; }
+        }
+        .toggle-sidebar-btn { display: none; }
+        
+        .jee-btn-group { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 2rem; border-top: 1px solid var(--surface-border); padding-top: 1.5rem; }
+        .jee-btn { padding: 0.75rem 1.25rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; border: 1px solid;}
+        .jee-btn:hover { opacity: 0.85; }
+        .btn-save-next { background: var(--success); color: white; border-color: var(--success); }
+        .btn-save-review { background: var(--warning); color: white; border-color: var(--warning); }
+        .btn-clear { background: transparent; color: var(--text-primary); border-color: var(--surface-border); }
+        .btn-review-next { background: var(--primary); color: white; border-color: var(--primary); }
+        
+        .status-badge { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; color: var(--text-primary); border: 1px solid var(--surface-border); }
+        .status-nv { background: var(--surface-panel); }
+        .status-na { background: var(--danger); color: white; border-color: var(--danger); }
+        .status-a { background: var(--success); color: white; border-color: var(--success); }
+        .status-mr { background: var(--warning); color: white; border-radius: 50%; border-color: var(--warning); }
+        .status-amr { background: var(--warning); color: white; border-radius: 50%; position: relative; border-color: var(--warning); }
+        .status-amr::after { content: ''; position: absolute; bottom: -2px; right: -2px; width: 10px; height: 10px; background: var(--success); border-radius: 50%; border: 2px solid var(--surface-panel); }
+
+        .palette-btn { width: 42px; height: 42px; display: flex; justify-content: center; align-items: center; cursor: pointer; font-weight: 600; font-size: 0.9rem; transition: transform 0.1s; }
+        .palette-btn:hover { transform: scale(1.05); }
+
       `}</style>
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', '--show-sidebar': showRightPanel ? 'flex' : 'none' }}>
         {/* ── Visual Feedback Overlays ── */}
         {showViolationGlow && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 2000, pointerEvents: 'none', animation: 'screenGlowAnim 1.5s forwards' }} />
@@ -490,208 +540,246 @@ const TakeExam = () => {
           </div>
         )}
 
-        {/* ── Sticky Header ── */}
+        {/* ── Sticky Header (JEE Style) ── */}
         <header className="glass-panel" style={{ position: 'sticky', top: 0, zIndex: 100, borderRadius: 0, borderTop: 'none', borderLeft: 'none', borderRight: 'none', padding: '0 2rem', height: '70px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.3s ease' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-            <div className={`violation-counter ${timeLeft < 300 ? 'active-pulse' : ''}`} style={{ background: timeLeft < 300 ? 'rgba(239, 68, 68, 0.1)' : 'var(--primary-light)', color: timeLeft < 300 ? 'var(--danger)' : 'var(--primary)', borderColor: timeLeft < 300 ? 'var(--danger)' : 'var(--primary)', transition: 'none' }}>
-              <Clock size={18} style={{ animation: 'timerTick 1s infinite' }} />
-              <span style={{ fontSize: '1.25rem', letterSpacing: '0.05em' }}>{formatTime(timeLeft)}</span>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>{exam.title}</h2>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>Candidate</span>
+                <span style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: '700' }}>{user?.name}</span>
+              </div>
+              {user?.profilePhoto ? (
+                <img src={user.profilePhoto.startsWith('blob:') ? user.profilePhoto : `http://localhost:5000${user.profilePhoto}`} alt="Profile" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary-light)' }} />
+              ) : (
+                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '1.2rem', border: '2px solid var(--primary-light)' }}>
+                  {user?.name?.charAt(0)?.toUpperCase()}
+                </div>
+              )}
             </div>
-
+            
+            <div className={`violation-counter ${timeLeft < 300 ? 'active-pulse' : ''}`} style={{ background: timeLeft < 300 ? 'rgba(239, 68, 68, 0.1)' : 'var(--primary-light)', color: timeLeft < 300 ? 'var(--danger)' : 'var(--primary)', borderColor: timeLeft < 300 ? 'var(--danger)' : 'var(--primary)', transition: 'none', padding: '0.5rem 1rem', display: 'flex', gap: '0.5rem', borderRadius: '8px', border: '1px solid', alignItems: 'center' }}>
+              <Clock size={18} style={{ animation: 'timerTick 1s infinite' }} />
+              <span style={{ fontSize: '1.25rem', letterSpacing: '0.05em', fontWeight: '700' }}>{formatTime(timeLeft)}</span>
+            </div>
+            
+            <button className="btn-primary-outline toggle-sidebar-btn" onClick={() => setShowRightPanel(!showRightPanel)} style={{ padding: '0.5rem 1rem' }}>
+              {showRightPanel ? 'Hide Questions ▲' : 'Show Questions ▼'}
+            </button>
           </div>
-
-          <div style={{ textAlign: 'center' }}>
-            <h2 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>{exam.title}</h2>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '500' }}>Candidate: {user?.name}</span>
-          </div>
-
-          <button className="btn-primary" onClick={handleFinalSubmit} disabled={submitting} style={{ padding: '0.75rem 1.5rem', fontSize: '0.9rem' }}>
-            <Send size={16} /> Final Submission
-          </button>
         </header>
 
         {/* ── Main Layout ── */}
-        <main style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 340px', padding: '2rem', gap: '2rem', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
+        <main className="main-layout" style={{ flex: 1, display: 'grid', gridTemplateColumns: '70% 30%', padding: '0', maxWidth: '100%', margin: '0', width: '100%', height: 'calc(100vh - 70px)', overflow: 'hidden' }}>
 
           {/* Left: Questions Section */}
-          <section style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <section style={{ display: 'flex', flexDirection: 'column', height: '100%', borderRight: '1px solid var(--surface-border)', background: 'var(--bg-dashboard)' }}>
+            
+            {/* Scrollable Question Content */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '2rem 3rem' }}>
+              <div key={currentQuestion} style={{ animation: 'qFadeIn 0.3s ease-out' }}>
+                <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', marginBottom: '2.5rem' }}>
+                  <span style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+                    Q{currentQuestion + 1}.
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    {exam.questions[currentQuestion].questionText && (
+                      <h3 style={{ margin: 0, fontSize: '1.2rem', lineHeight: '1.6', color: 'var(--text-primary)', fontWeight: '500' }}>
+                        {exam.questions[currentQuestion].questionText}
+                      </h3>
+                    )}
+                    {exam.questions[currentQuestion].questionImage && (
+                      <img src={exam.questions[currentQuestion].questionImage} alt="Problem statement" style={{ marginTop: '1.5rem', maxWidth: '100%', borderRadius: '12px', border: '1px solid var(--surface-border)' }} />
+                    )}
+                  </div>
+                </div>
 
-            {/* Question Navigator */}
-            <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-muted)', marginRight: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Questions</span>
-              {exam.questions.map((q, idx) => {
-                const ansState = answers.find(a => a.questionId === q._id);
-                const isAnswered = ansState && (ansState.selectedOptionIndex !== null || (ansState.fillText && ansState.fillText.trim().length > 0));
-                const isCurrent = idx === currentQuestion;
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentQuestion(idx)}
-                    style={{
-                      width: '38px', height: '38px', borderRadius: '10px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer',
-                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                      background: isCurrent ? 'var(--primary)' : isAnswered ? 'var(--primary-light)' : (isDarkMode ? 'rgba(255,255,255,0.03)' : '#f8fafc'),
-                      color: isCurrent ? '#fff' : isAnswered ? 'var(--primary)' : 'var(--text-muted)',
-                      border: '1.5px solid',
-                      borderColor: isCurrent ? 'var(--primary)' : isAnswered ? 'var(--primary)' : 'var(--surface-border)',
-                      boxShadow: isCurrent ? '0 4px 12px rgba(13,148,136,0.3)' : 'none'
-                    }}
-                    onMouseOver={e => !isCurrent && (e.currentTarget.style.borderColor = 'var(--primary)')}
-                    onMouseOut={e => !isCurrent && (e.currentTarget.style.borderColor = isAnswered ? 'var(--primary)' : 'rgba(0,0,0,0.06)')}
-                  >
-                    {idx + 1}
-                  </button>
-                );
-              })}
-              <div style={{ marginLeft: 'auto', background: '#f1f5f9', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: '600' }}>
-                Progress: {answeredCount} / {exam.questions.length}
-              </div>
-            </div>
-
-            {/* Current Question Block */}
-            <div className="glass-panel" key={currentQuestion} style={{ padding: '3rem', minHeight: '400px', animation: 'qFadeIn 0.5s ease-out' }}>
-              <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start', marginBottom: '2.5rem' }}>
-                <span style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '1.1rem', flexShrink: 0 }}>
-                  {currentQuestion + 1}
-                </span>
-                <div style={{ flex: 1 }}>
-                  {exam.questions[currentQuestion].questionText && (
-                    <h3 style={{ margin: 0, fontSize: '1.35rem', lineHeight: '1.5', color: 'var(--text-primary)', fontWeight: '600' }}>
-                      {exam.questions[currentQuestion].questionText}
-                    </h3>
-                  )}
-                  {exam.questions[currentQuestion].questionImage && (
-                    <img src={exam.questions[currentQuestion].questionImage} alt="Problem statement" style={{ marginTop: '1rem', maxWidth: '100%', borderRadius: '12px', border: '1.5px solid var(--surface-border)' }} />
+                <div style={{ paddingLeft: '3rem' }}>
+                  {exam.questions[currentQuestion].type === 'fill-in-blank' ? (
+                    <div>
+                      <input
+                        type="text"
+                        className="input-field-enhanced"
+                        placeholder="Type your exact answer here..."
+                        value={answers.find(a => a.questionId === exam.questions[currentQuestion]._id)?.fillText || ''}
+                        onChange={(e) => handleTextFill(exam.questions[currentQuestion]._id, e.target.value)}
+                        style={{ width: '100%', maxWidth: '500px', padding: '1rem', borderRadius: '8px', border: '2px solid var(--surface-border)', background: isDarkMode ? 'rgba(255,255,255,0.02)' : 'white', color: 'var(--text-primary)', fontSize: '1rem' }}
+                      />
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {exam.questions[currentQuestion].options.map((opt, optIndex) => {
+                        const isSelected = answers.find(a => a.questionId === exam.questions[currentQuestion]._id)?.selectedOptionIndex === optIndex;
+                        const optImg = exam.questions[currentQuestion].optionImages?.[optIndex];
+                        return (
+                          <label key={optIndex} style={{
+                            display: 'flex', alignItems: 'center', gap: '1rem',
+                            padding: '1rem 1.5rem', borderRadius: '8px',
+                            border: '1px solid',
+                            borderColor: isSelected ? 'var(--primary)' : 'var(--surface-border)',
+                            background: isSelected ? 'var(--primary-light)' : (isDarkMode ? 'rgba(255,255,255,0.02)' : '#ffffff'),
+                            cursor: 'pointer', transition: 'all 0.2s ease',
+                            color: 'var(--text-primary)'
+                          }}>
+                            <input
+                              type="radio"
+                              name={`q-${exam.questions[currentQuestion]._id}`}
+                              checked={isSelected}
+                              onChange={() => handleOptionSelect(exam.questions[currentQuestion]._id, optIndex)}
+                              style={{ width: '18px', height: '18px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                              {opt && <span style={{ fontSize: '1rem' }}>{opt}</span>}
+                              {optImg && <img src={optImg} alt={`Option ${optIndex + 1}`} style={{ maxWidth: '250px', maxHeight: '120px', borderRadius: '8px', border: '1px solid var(--surface-border)' }} />}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               </div>
-
-              <div style={{ paddingLeft: '4rem' }}>
-                {exam.questions[currentQuestion].type === 'fill-in-blank' ? (
-                  <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                    <input
-                      type="text"
-                      className="input-field-enhanced"
-                      placeholder="Type your exact answer here..."
-                      value={answers.find(a => a.questionId === exam.questions[currentQuestion]._id)?.fillText || ''}
-                      onChange={(e) => handleTextFill(exam.questions[currentQuestion]._id, e.target.value)}
-                      style={{ width: '100%', padding: '1.25rem', borderRadius: '12px', border: '2px solid var(--surface-border)', background: isDarkMode ? 'rgba(255,255,255,0.02)' : 'white', color: 'var(--text-primary)', fontSize: '1.1rem', fontWeight: '500', transition: 'all 0.2s' }}
-                      onFocus={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.boxShadow = '0 0 0 4px var(--primary-light)'; }}
-                      onBlur={e => { e.currentTarget.style.borderColor = 'var(--surface-border)'; e.currentTarget.style.boxShadow = 'none'; }}
-                    />
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {exam.questions[currentQuestion].options.map((opt, optIndex) => {
-                      const isSelected = answers.find(a => a.questionId === exam.questions[currentQuestion]._id)?.selectedOptionIndex === optIndex;
-                      const optImg = exam.questions[currentQuestion].optionImages?.[optIndex];
-                      return (
-                        <label key={optIndex} style={{
-                          display: 'flex', alignItems: 'center', gap: '1.1rem',
-                          padding: '1.1rem 1.5rem', borderRadius: '12px',
-                          border: '2px solid',
-                          borderColor: isSelected ? 'var(--primary)' : 'var(--surface-border)',
-                          background: isSelected ? 'var(--primary-light)' : (isDarkMode ? 'rgba(255,255,255,0.02)' : '#fbfcfd'),
-                          cursor: 'pointer', transition: 'all 0.2s ease',
-                          color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          fontWeight: isSelected ? '600' : '400'
-                        }}
-                          onMouseOver={e => !isSelected && (e.currentTarget.style.borderColor = 'rgba(13,148,136,0.3)')}
-                          onMouseOut={e => !isSelected && (e.currentTarget.style.borderColor = 'rgba(0,0,0,0.05)')}
-                        >
-                          <input
-                            type="radio"
-                            name={`q-${exam.questions[currentQuestion]._id}`}
-                            checked={isSelected}
-                            onChange={() => handleOptionSelect(exam.questions[currentQuestion]._id, optIndex)}
-                            style={{ width: '20px', height: '20px', accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }}
-                          />
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                            {opt && <span style={{ fontSize: '1.05rem' }}>{opt}</span>}
-                            {optImg && <img src={optImg} alt={`Option ${optIndex + 1}`} style={{ maxWidth: '250px', maxHeight: '120px', borderRadius: '8px', border: '1px solid var(--surface-border)' }} />}
-                          </div>
-                          {isSelected && <CheckCircle size={20} color="var(--primary)" style={{ marginLeft: 'auto', flexShrink: 0 }} />}
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
             </div>
 
-            {/* Nav Controls */}
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <button
-                className="btn-secondary"
-                disabled={currentQuestion === 0}
-                onClick={() => setCurrentQuestion(prev => prev - 1)}
-                style={{ opacity: currentQuestion === 0 ? 0.4 : 1 }}
-              >
-                Previous Question
-              </button>
-              <button
-                className="btn-primary"
-                onClick={() => currentQuestion < exam.questions.length - 1 ? setCurrentQuestion(prev => prev + 1) : handleFinalSubmit()}
-                style={{ minWidth: '180px' }}
-              >
-                {currentQuestion === exam.questions.length - 1 ? 'Finish Exam' : 'Next Question'}
-              </button>
+            {/* Bottom Action Bar */}
+            <div style={{ padding: '1.5rem 3rem', background: 'var(--surface-panel)', borderTop: '1px solid var(--surface-border)', zIndex: 10 }}>
+              <div className="jee-btn-group" style={{ marginTop: '0', paddingTop: '0', borderTop: 'none' }}>
+                <button 
+                  className="jee-btn btn-save-next" 
+                  onClick={() => {
+                    const ans = answers.find(a => a.questionId === exam.questions[currentQuestion]._id);
+                    const isAnswered = ans && (ans.selectedOptionIndex !== null || (ans.fillText && ans.fillText.trim().length > 0));
+                    setQuestionStatuses(p => { const o = [...p]; o[currentQuestion] = isAnswered ? 'answered' : 'not_answered'; return o; });
+                    if(currentQuestion < exam.questions.length - 1) setCurrentQuestion(p => p + 1);
+                  }}
+                >
+                  Save & Next
+                </button>
+                <button 
+                  className="jee-btn btn-clear"
+                  onClick={() => {
+                    setAnswers(prev => prev.map(a => a.questionId === exam.questions[currentQuestion]._id ? { ...a, selectedOptionIndex: null, fillText: '' } : a));
+                    setQuestionStatuses(p => { const o = [...p]; o[currentQuestion] = 'not_answered'; return o; });
+                  }}
+                >
+                  Clear Response
+                </button>
+                <button 
+                  className="jee-btn btn-save-review"
+                  onClick={() => {
+                    const ans = answers.find(a => a.questionId === exam.questions[currentQuestion]._id);
+                    const isAnswered = ans && (ans.selectedOptionIndex !== null || (ans.fillText && ans.fillText.trim().length > 0));
+                    setQuestionStatuses(p => { const o = [...p]; o[currentQuestion] = isAnswered ? 'answered_marked_review' : 'marked_review'; return o; });
+                    if(currentQuestion < exam.questions.length - 1) setCurrentQuestion(p => p + 1);
+                  }}
+                >
+                  Save & Mark for Review
+                </button>
+                <button 
+                  className="jee-btn btn-review-next"
+                  onClick={() => {
+                    setQuestionStatuses(p => { const o = [...p]; o[currentQuestion] = 'marked_review'; return o; });
+                    if(currentQuestion < exam.questions.length - 1) setCurrentQuestion(p => p + 1);
+                  }}
+                >
+                  Mark for Review & Next
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--surface-border)' }}>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button className="btn-secondary" disabled={currentQuestion === 0} onClick={() => setCurrentQuestion(p => p - 1)} style={{ padding: '0.5rem 1rem' }}>
+                    &lt;&lt; Back
+                  </button>
+                  <button className="btn-secondary" disabled={currentQuestion === exam.questions.length - 1} onClick={() => setCurrentQuestion(p => p + 1)} style={{ padding: '0.5rem 1rem' }}>
+                    Next &gt;&gt;
+                  </button>
+                </div>
+                <button className="btn-primary" onClick={handleFinalSubmit} disabled={submitting} style={{ padding: '0.5rem 2rem' }}>
+                  Submit
+                </button>
+              </div>
             </div>
           </section>
 
-          {/* Right: Monitoring Sidebar */}
-          <aside style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-
-            {/* Camera Feed - Hidden visually but functional in background */}
-            <div style={{ display: 'none' }}>
-              <video ref={videoRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }} />
+          {/* Right: Monitoring Sidebar & Palette */}
+          <aside className="sidebar-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--surface-panel)', overflowY: 'auto' }}>
+            
+            {/* Legend */}
+            <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--surface-border)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  <div className="status-badge status-nv"></div> Not Visited
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  <div className="status-badge status-na"></div> Not Answered
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  <div className="status-badge status-a"></div> Answered
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  <div className="status-badge status-mr"></div> Marked for Review
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: '500', gridColumn: '1 / -1' }}>
+                  <div className="status-badge status-amr"></div> Answered & Marked for Review (will be considered for evaluation)
+                </div>
+              </div>
             </div>
 
-            {/* Integrity Metrics */}
-            <div className="glass-panel" style={{ padding: '1.5rem' }}>
-              <h4 style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {/* Question Palette Grid */}
+            <div style={{ padding: '1.5rem', flex: 1 }}>
+              <h4 style={{ fontSize: '0.9rem', color: 'var(--text-primary)', fontWeight: '700', marginBottom: '1rem', background: 'var(--primary-light)', padding: '0.5rem', borderRadius: '4px', textAlign: 'center', border: '1px solid var(--primary)' }}>
+                {exam.subject || 'Exam'} Questions
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(42px, 1fr))', gap: '0.5rem' }}>
+                {exam.questions.map((q, idx) => {
+                  const s = questionStatuses[idx] || 'not_visited';
+                  let badgeClass = 'status-nv';
+                  if (s === 'not_answered') badgeClass = 'status-na';
+                  if (s === 'answered') badgeClass = 'status-a';
+                  if (s === 'marked_review') badgeClass = 'status-mr';
+                  if (s === 'answered_marked_review') badgeClass = 'status-amr';
+                  
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`status-badge palette-btn ${badgeClass}`} 
+                      style={{ border: currentQuestion === idx ? '2px solid var(--text-primary)' : '' }}
+                      onClick={() => setCurrentQuestion(idx)}
+                    >
+                      {idx + 1}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Anti Cheat Monitoring below Palette */}
+            <div style={{ padding: '0 1.5rem 1.5rem 1.5rem' }}>
+               <h4 style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <AlertTriangle size={14} /> Integrity Status
               </h4>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1rem', marginBottom: '1.5rem' }}>
-                <span style={{ fontSize: '3rem', fontWeight: '800', lineHeight: 1, color: warnings === 0 ? 'var(--success)' : warnings >= 4 ? 'var(--danger)' : 'var(--warning)', animation: warnings > 0 ? 'violationPop 0.5s' : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '2rem', fontWeight: '800', lineHeight: 1, color: warnings === 0 ? 'var(--success)' : warnings >= 4 ? 'var(--danger)' : 'var(--warning)' }}>
                   {warnings}
                 </span>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', paddingBottom: '0.5rem', fontWeight: '600' }}>
-                  TOTAL VIOLATIONS
-                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', paddingBottom: '0.25rem', fontWeight: '600' }}>VIOLATIONS</span>
               </div>
-              <div style={{ height: '8px', background: '#f1f5f9', borderRadius: '10px', marginBottom: '1rem', overflow: 'hidden' }}>
+              <div style={{ height: '6px', background: 'var(--surface-border)', borderRadius: '10px', overflow: 'hidden' }}>
                 <div style={{
                   height: '100%', background: warnings >= 4 ? 'var(--danger)' : warnings >= 2 ? 'var(--warning)' : 'var(--success)',
                   width: `${(warnings / MAX_VIOLATIONS) * 100}%`, transition: 'width 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
                 }} />
               </div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <Info size={14} /> {MAX_VIOLATIONS - warnings} violation(s) remaining
-              </p>
             </div>
 
-            {/* Activity Timeline */}
-            <div className="glass-panel" style={{ padding: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <h4 style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1.25rem' }}>Session Timeline</h4>
-              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.8rem', paddingRight: '0.5rem' }}>
-                {activityLog.map((log, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '0.8rem', animation: 'fadeIn 0.4s ease-out' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: log.type === 'start' ? 'var(--primary)' : 'var(--danger)', marginTop: '5px' }} />
-                      {i < activityLog.length - 1 && <div style={{ width: '1.5px', flex: 1, background: 'rgba(0,0,0,0.06)', margin: '4px 0' }} />}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '700' }}>{log.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '500' }}>{log.label}</div>
-                    </div>
-                  </div>
-                ))}
-                <div ref={timelineEndRef} />
-              </div>
+            <div style={{ display: 'none' }}>
+              <video ref={videoRef} autoPlay muted playsInline />
             </div>
+
           </aside>
         </main>
 
